@@ -1,6 +1,6 @@
 package main
 
-import "cmd/forgesync/main.go/internal/cli"
+import "github.com/nox456/forgesync/internal/cli"
 
 func main() {
 	cli.Execute()
