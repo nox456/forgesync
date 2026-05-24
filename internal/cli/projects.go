@@ -34,7 +34,7 @@ var projectsCmd = &cobra.Command{
 
 		fmt.Println("Projects:")
 		for _, project := range projects {
-			fmt.Printf("  %-25s %s\n", project.Name, project.Repo)
+			fmt.Printf("  [%s] %-25s %s\n", project.PageID, project.Name, project.Repo)
 		}
 	},
 }

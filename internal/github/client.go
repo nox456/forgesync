@@ -21,7 +21,7 @@ type Issue struct {
 	Repo        string
 	UpdatedAt   time.Time
 	ClosedAt    *time.Time
-	HasLikendPR bool
+	HasLinkedPR bool
 }
 
 func NewClient(token string) *Client {
@@ -69,7 +69,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 			Repo:        fmt.Sprintf("%s/%s", *issueResponse.Repository.Owner.Login, *issueResponse.Repository.Name),
 			UpdatedAt:   (*issueResponse.UpdatedAt).Time,
 			ClosedAt:    closedAt,
-			HasLikendPR: issueResponse.PullRequestLinks != nil,
+			HasLinkedPR: issueResponse.PullRequestLinks != nil,
 		}
 
 		issues = append(issues, issue)

@@ -1,1 +1,19 @@
 package sync
+
+import (
+	"fmt"
+
+	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/notion"
+)
+
+func IssueToStoryInput(issue github.Issue, projectPageId string) notion.StoryInput {
+	return notion.StoryInput{
+		Name:    issue.Title,
+		Project: projectPageId,
+		Issue:   fmt.Sprintf("%d", issue.Number),
+		Url:     issue.URL,
+		Status:  ComputeStatus(issue),
+		Labels:  issue.Labels,
+	}
+}

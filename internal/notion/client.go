@@ -24,7 +24,7 @@ func NewClient(token string, projectsSourceId string, storiesSourceId string) *C
 	}
 }
 
-func (c *Client) ListProjects() ([]ProjectProperties, error) {
+func (c *Client) ListProjects() ([]Project, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.ProjectsSourceId)
 
@@ -55,12 +55,13 @@ func (c *Client) ListProjects() ([]ProjectProperties, error) {
 		return nil, err
 	}
 
-	var projects []ProjectProperties
+	var projects []Project
 
 	for _, result := range data.Results {
-		projects = append(projects, ProjectProperties{
-			Name: result.Properties.Name.Title[0].PlainText,
-			Repo: result.Properties.Repo.RichText[0].PlainText,
+		projects = append(projects, Project{
+			PageID: result.ID,
+			Name:   result.Properties.Name.Title[0].PlainText,
+			Repo:   result.Properties.Repo.RichText[0].PlainText,
 		})
 	}
 
