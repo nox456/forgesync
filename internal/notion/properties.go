@@ -7,6 +7,7 @@ type Project struct {
 }
 
 type Story struct {
+	PageID       string   `json:"pageId"`
 	Name         string   `json:"name"`
 	Project      string   `json:"project"`
 	Issue        string   `json:"issue"`

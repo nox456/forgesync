@@ -8,7 +8,7 @@ func ComputeStatus(issue github.Issue) string {
 		if issue.HasLinkedPR {
 			return "In PR"
 		}
-		return "In progres"
+		return "In progress"
 	case "closed":
 		return "Done"
 	}

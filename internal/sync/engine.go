@@ -58,21 +58,30 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 
 	fmt.Println("Syncing...")
 	for _, issue := range issues {
-		_, ok := projectsMap[strings.ToLower(issue.Repo)]
+		project, ok := projectsMap[strings.ToLower(issue.Repo)]
 		if !ok {
 			skipped++
 			continue
 		}
 
-		// storyInput := IssueToStoryInput(issue, project.PageID)
-		if !options.DryRun {
-			// err := e.NotionClient.UpsertStory(storyInput)
-			// if err != nil {
-			// 	errors++
-			// 	continue
-			// }
+		if options.DryRun {
+			created++
+			continue
 		}
-		created++
+
+		storyInput := IssueToStoryInput(issue, project.PageID)
+		isCreated, err := e.NotionClient.UpsertStory(storyInput, issue)
+		if err != nil {
+			fmt.Println("Error upserting story:", err)
+			errors++
+			continue
+		}
+
+		if isCreated {
+			created++
+		} else {
+			updated++
+		}
 	}
 
 	report := &Report{
