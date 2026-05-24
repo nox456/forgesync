@@ -155,7 +155,7 @@ type UpsertResult struct {
 	Unchanged bool
 }
 
-func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue) (*UpsertResult, error) {
+func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun bool) (*UpsertResult, error) {
 	existingStory, err := c.FindStoryByIssue(issue)
 
 	if err != nil {
@@ -178,6 +178,13 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue) (*Upsert
 	}
 
 	if existingStory == nil {
+
+		if isDryRun {
+			return &UpsertResult{
+				Created: true,
+			}, nil
+		}
+
 		url := fmt.Sprintf("%s/pages", notionBaseUrl)
 
 		createProps := baseProps
@@ -228,6 +235,13 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue) (*Upsert
 				Unchanged: true,
 			}, nil
 		}
+
+		if isDryRun {
+			return &UpsertResult{
+				Updated: true,
+			}, nil
+		}
+
 		url := fmt.Sprintf("%s/pages/%s", notionBaseUrl, existingStory.PageID)
 
 		updatePayload := &StoryUpdatePayload{

@@ -66,13 +66,8 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 			continue
 		}
 
-		if options.DryRun {
-			created++
-			continue
-		}
-
 		storyInput := IssueToStoryInput(issue, project.PageID)
-		result, err := e.NotionClient.UpsertStory(storyInput, issue)
+		result, err := e.NotionClient.UpsertStory(storyInput, issue, options.DryRun)
 		if err != nil {
 			fmt.Println("Error upserting story:", err)
 			errors++
