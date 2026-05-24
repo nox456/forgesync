@@ -46,6 +46,7 @@ var syncCmd = &cobra.Command{
 		fmt.Printf("  Created: %d\n", report.Created)
 		fmt.Printf("  Updated: %d\n", report.Updated)
 		fmt.Printf("  Skipped: %d\n", report.Skipped)
+		fmt.Printf("  Unchanged: %d\n", report.Unchanged)
 		fmt.Printf("  Errors:  %d\n", report.Errors)
 	},
 }

@@ -19,10 +19,11 @@ type EngineRunOptions struct {
 }
 
 type Report struct {
-	Created int
-	Updated int
-	Skipped int
-	Errors  int
+	Created   int
+	Updated   int
+	Skipped   int
+	Unchanged int
+	Errors    int
 }
 
 func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine {
@@ -54,6 +55,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	created := 0
 	updated := 0
 	skipped := 0
+	unchanged := 0
 	errors := 0
 
 	fmt.Println("Syncing...")
@@ -70,25 +72,28 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		}
 
 		storyInput := IssueToStoryInput(issue, project.PageID)
-		isCreated, err := e.NotionClient.UpsertStory(storyInput, issue)
+		result, err := e.NotionClient.UpsertStory(storyInput, issue)
 		if err != nil {
 			fmt.Println("Error upserting story:", err)
 			errors++
 			continue
 		}
 
-		if isCreated {
+		if result.Created {
 			created++
-		} else {
+		} else if result.Updated {
 			updated++
+		} else if result.Unchanged {
+			unchanged++
 		}
 	}
 
 	report := &Report{
-		Created: created,
-		Updated: updated,
-		Skipped: skipped,
-		Errors:  errors,
+		Created:   created,
+		Updated:   updated,
+		Skipped:   skipped,
+		Unchanged: unchanged,
+		Errors:    errors,
 	}
 
 	return report, nil
