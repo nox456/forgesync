@@ -51,6 +51,10 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 			issueLabels[i] = *label.Name
 		}
 
+		if issueResponse.IsPullRequest() {
+			continue
+		}
+
 		var closedAt *time.Time
 		if issueResponse.ClosedAt != nil {
 			closedAt = &issueResponse.ClosedAt.Time
