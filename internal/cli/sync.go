@@ -6,6 +6,7 @@ import (
 	"github.com/nox456/forgesync/internal/config"
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/output"
 	"github.com/nox456/forgesync/internal/sync"
 	"github.com/spf13/cobra"
 )
@@ -37,16 +38,13 @@ var syncCmd = &cobra.Command{
 			DryRun: DryRun,
 		})
 
+		printer := output.NewTextPrinter()
+
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		fmt.Printf("\n=== Sync Report ===\n")
-		fmt.Printf("  Created: %d\n", report.Created)
-		fmt.Printf("  Updated: %d\n", report.Updated)
-		fmt.Printf("  Skipped: %d\n", report.Skipped)
-		fmt.Printf("  Unchanged: %d\n", report.Unchanged)
-		fmt.Printf("  Errors:  %d\n", report.Errors)
+		printer.PrintReport(report)
 	},
 }

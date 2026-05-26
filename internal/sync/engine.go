@@ -18,12 +18,17 @@ type EngineRunOptions struct {
 	DryRun bool
 }
 
+type ReportError struct {
+	IssueNumber int
+	Error       string
+}
+
 type Report struct {
 	Created   int
 	Updated   int
 	Skipped   int
 	Unchanged int
-	Errors    int
+	Errors    []ReportError
 }
 
 func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine {
@@ -56,7 +61,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	updated := 0
 	skipped := 0
 	unchanged := 0
-	errors := 0
+	errors := make([]ReportError, 0)
 
 	fmt.Println("Syncing...")
 	for _, issue := range issues {
@@ -70,7 +75,10 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		result, err := e.NotionClient.UpsertStory(storyInput, issue, options.DryRun)
 		if err != nil {
 			fmt.Println("Error upserting story:", err)
-			errors++
+			errors = append(errors, ReportError{
+				IssueNumber: issue.Number,
+				Error:       err.Error(),
+			})
 			continue
 		}
 
