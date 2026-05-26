@@ -5,7 +5,6 @@ import (
 
 	"github.com/nox456/forgesync/internal/config"
 	"github.com/nox456/forgesync/internal/notion"
-	"github.com/nox456/forgesync/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -26,8 +25,6 @@ var projectsCmd = &cobra.Command{
 
 		notionClient := notion.NewClient(config.NotionToken, config.ProjectsSourceId, config.StoriesSourceId)
 
-		printer := output.NewTextPrinter()
-
 		projects, err := notionClient.ListProjects()
 
 		if err != nil {
@@ -35,6 +32,6 @@ var projectsCmd = &cobra.Command{
 			return
 		}
 
-		printer.PrintProjects(projects)
+		Printer.PrintProjects(projects)
 	},
 }

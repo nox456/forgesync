@@ -5,7 +5,6 @@ import (
 
 	"github.com/nox456/forgesync/internal/config"
 	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -28,13 +27,11 @@ var issuesCmd = &cobra.Command{
 
 		issues, err := githubClient.FetchAssignedIssues(cmd.Context())
 
-		printer := output.NewTextPrinter()
-
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		printer.PrintIssues(issues)
+		Printer.PrintIssues(issues)
 	},
 }

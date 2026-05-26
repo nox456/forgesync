@@ -15,7 +15,8 @@ type Engine struct {
 }
 
 type EngineRunOptions struct {
-	DryRun bool
+	DryRun     bool
+	JSONOutput bool
 }
 
 type ReportError struct {
@@ -39,7 +40,9 @@ func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine
 }
 
 func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, error) {
-	fmt.Println("Fetching notion projects...")
+	if !options.JSONOutput {
+		fmt.Println("Fetching notion projects...")
+	}
 	projects, err := e.NotionClient.ListProjects()
 	if err != nil {
 		return nil, err
@@ -51,7 +54,9 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		projectsMap[strings.ToLower(project.Repo)] = project
 	}
 
-	fmt.Println("Fetching github issues...")
+	if !options.JSONOutput {
+		fmt.Println("Fetching github issues...")
+	}
 	issues, err := e.GithubClient.FetchAssignedIssues(ctx)
 	if err != nil {
 		return nil, err
@@ -63,7 +68,9 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	unchanged := 0
 	errors := make([]ReportError, 0)
 
-	fmt.Println("Syncing...")
+	if !options.JSONOutput {
+		fmt.Println("Syncing...")
+	}
 	for _, issue := range issues {
 		project, ok := projectsMap[strings.ToLower(issue.Repo)]
 		if !ok {

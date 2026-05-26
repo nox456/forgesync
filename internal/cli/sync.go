@@ -6,7 +6,6 @@ import (
 	"github.com/nox456/forgesync/internal/config"
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
-	"github.com/nox456/forgesync/internal/output"
 	"github.com/nox456/forgesync/internal/sync"
 	"github.com/spf13/cobra"
 )
@@ -35,16 +34,15 @@ var syncCmd = &cobra.Command{
 		engine := sync.NewEngine(notionClient, githubClient)
 
 		report, err := engine.Run(cmd.Context(), sync.EngineRunOptions{
-			DryRun: DryRun,
+			DryRun:     DryRun,
+			JSONOutput: JSONOutput,
 		})
-
-		printer := output.NewTextPrinter()
 
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		printer.PrintReport(report)
+		Printer.PrintReport(report)
 	},
 }
