@@ -4,17 +4,33 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nox456/forgesync/internal/config"
+	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/output"
 	"github.com/spf13/cobra"
 )
 
 var JSONOutput bool
 var Printer output.Printer
+var Config *config.Config
+var GithubClient *github.Client
+var NotionClient *notion.Client
 
 var rootCmd = &cobra.Command{
 	Use:   "forgesync",
 	Short: "ForgeSync is a CLI tool for syncing Notion databases with GitHub repositories",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		config, err := config.Load()
+		if err != nil {
+			return err
+		}
+
+		Config = config
+
+		GithubClient = github.NewClient(Config.GitHubToken)
+		NotionClient = notion.NewClient(Config.NotionToken, Config.ProjectsSourceId, Config.StoriesSourceId)
+
 		if JSONOutput {
 			Printer = output.NewJSONPrinter()
 		} else {

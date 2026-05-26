@@ -3,9 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/nox456/forgesync/internal/config"
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/sync"
 	"github.com/spf13/cobra"
 )
@@ -21,17 +18,7 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Sync",
 	Run: func(cmd *cobra.Command, args []string) {
-		config, err := config.Load()
-
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		notionClient := notion.NewClient(config.NotionToken, config.ProjectsSourceId, config.StoriesSourceId)
-		githubClient := github.NewClient(config.GitHubToken)
-
-		engine := sync.NewEngine(notionClient, githubClient)
+		engine := sync.NewEngine(NotionClient, GithubClient)
 
 		report, err := engine.Run(cmd.Context(), sync.EngineRunOptions{
 			DryRun:     DryRun,
