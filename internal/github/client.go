@@ -63,7 +63,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 		owner := *issueResponse.Repository.Owner.Login
 		repo := *issueResponse.Repository.Name
 
-		hasLinkedPR, err := hasConnectedPR(ctx, client, owner, repo, *issueResponse.Number)
+		hasLinkedPR, err := c.hasConnectedPR(ctx, owner, repo, *issueResponse.Number)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +86,12 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 	return issues, nil
 }
 
-func hasConnectedPR(ctx context.Context, client *github.Client, owner, repo string, number int) (bool, error) {
+func (c *Client) hasConnectedPR(ctx context.Context, owner, repo string, number int) (bool, error) {
+	client, err := github.NewClient(github.WithAuthToken(c.Token))
+	if err != nil {
+		return false, err
+	}
+
 	opts := &github.ListOptions{PerPage: 100}
 	connections := 0
 
@@ -97,10 +102,7 @@ func hasConnectedPR(ctx context.Context, client *github.Client, owner, repo stri
 		}
 
 		for _, event := range events {
-			if event.Event == nil {
-				continue
-			}
-			switch *event.Event {
+			switch event.GetEvent() {
 			case "connected":
 				connections++
 			case "disconnected":
