@@ -12,7 +12,7 @@ func init() {
 
 var issuesCmd = &cobra.Command{
 	Use:   "issues",
-	Short: "List issues",
+	Short: "List issues in GitHub",
 	Run: func(cmd *cobra.Command, args []string) {
 		issues, err := GithubClient.FetchAssignedIssues(cmd.Context())
 

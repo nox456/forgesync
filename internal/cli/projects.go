@@ -12,7 +12,7 @@ func init() {
 
 var projectsCmd = &cobra.Command{
 	Use:   "projects",
-	Short: "List projects",
+	Short: "List projects in Notion",
 	Run: func(cmd *cobra.Command, args []string) {
 		projects, err := NotionClient.ListProjects()
 

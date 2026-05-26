@@ -16,7 +16,7 @@ func init() {
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Sync",
+	Short: "Sync Notion stories with GitHub issuse (use --dry-run to see what would be changed without actually changing anything)",
 	Run: func(cmd *cobra.Command, args []string) {
 		engine := sync.NewEngine(NotionClient, GithubClient)
 
