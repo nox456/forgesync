@@ -20,7 +20,7 @@ type Issue struct {
 	Number      int    `json:"number"`
 	Repo        string `json:"repo"`
 	Title       string `json:"title"`
-	HasLinkedPR bool   `json:"hasLinkedPR"`
+	HasLinkedPR bool   `json:"has_linked_pr"`
 }
 
 type Report struct {
@@ -44,7 +44,9 @@ func (p *JSONPrinter) PrintProjects(projects []notion.Project) {
 		}
 	}
 
-	bytes, err := json.Marshal(struct{ Projects []Project }{Projects: parsedProjects})
+	bytes, err := json.Marshal(struct {
+		Projects []Project `json:"projects"`
+	}{Projects: parsedProjects})
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -65,7 +67,9 @@ func (p *JSONPrinter) PrintIssues(issues []github.Issue) {
 		}
 	}
 
-	bytes, err := json.Marshal(struct{ Issues []Issue }{Issues: parsedIssues})
+	bytes, err := json.Marshal(struct {
+		Issues []Issue `json:"issues"`
+	}{Issues: parsedIssues})
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -82,7 +86,9 @@ func (p *JSONPrinter) PrintReport(report *sync.Report) {
 		Unchanged: report.Unchanged,
 	}
 
-	bytes, err := json.Marshal(struct{ Report Report }{Report: parsedReport})
+	bytes, err := json.Marshal(struct {
+		Report Report `json:"report"`
+	}{Report: parsedReport})
 	if err != nil {
 		fmt.Println(err)
 		return
