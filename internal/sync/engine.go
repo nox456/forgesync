@@ -43,7 +43,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	if !options.JSONOutput {
 		fmt.Println("Fetching notion projects...")
 	}
-	projects, err := e.NotionClient.ListProjects()
+	projects, err := e.NotionClient.ListProjects(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		}
 
 		storyInput := IssueToStoryInput(issue, project.PageID)
-		result, err := e.NotionClient.UpsertStory(storyInput, issue, options.DryRun)
+		result, err := e.NotionClient.UpsertStory(ctx, storyInput, issue, options.DryRun)
 		if err != nil {
 			errors = append(errors, ReportError{
 				IssueNumber: issue.Number,

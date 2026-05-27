@@ -2,6 +2,7 @@ package notion
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,11 +28,11 @@ func NewClient(token string, projectsSourceId string, storiesSourceId string) *C
 	}
 }
 
-func (c *Client) ListProjects() ([]Project, error) {
+func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.ProjectsSourceId)
 
-	req, _ := http.NewRequest("POST", url, nil)
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, nil)
 
 	req.Header.Add("Notion-Version", notionApiVersion)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
@@ -71,7 +72,7 @@ func (c *Client) ListProjects() ([]Project, error) {
 	return projects, nil
 }
 
-func (c *Client) FindStoryByIssue(issue github.Issue) (*Story, error) {
+func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue) (*Story, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.StoriesSourceId)
 
@@ -88,7 +89,7 @@ func (c *Client) FindStoryByIssue(issue github.Issue) (*Story, error) {
 		return nil, fmt.Errorf("marshal create page payload: %w", err)
 	}
 
-	req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 
 	req.Header.Add("Notion-Version", notionApiVersion)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))

@@ -2,6 +2,7 @@ package notion
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,8 +18,8 @@ type UpsertResult struct {
 	Unchanged bool
 }
 
-func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun bool) (*UpsertResult, error) {
-	existingStory, err := c.FindStoryByIssue(issue)
+func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue github.Issue, isDryRun bool) (*UpsertResult, error) {
+	existingStory, err := c.FindStoryByIssue(ctx, issue)
 
 	if err != nil {
 		return nil, err
@@ -79,7 +80,7 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun
 			return nil, err
 		}
 
-		req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
+		req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 
 		req.Header.Add("Notion-Version", notionApiVersion)
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
@@ -129,7 +130,7 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun
 			return nil, err
 		}
 
-		req, _ := http.NewRequest("PATCH", url, bytes.NewReader(body))
+		req, _ := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(body))
 
 		req.Header.Add("Notion-Version", notionApiVersion)
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
