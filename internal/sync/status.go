@@ -10,7 +10,10 @@ func ComputeStatus(issue github.Issue) string {
 		}
 		return "In progress"
 	case "closed":
-		return "Done"
+		if issue.HasLinkedPR {
+			return "Done"
+		}
+		return "Cancelled"
 	}
 
 	return "Not started"

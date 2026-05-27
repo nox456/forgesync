@@ -8,6 +8,10 @@ import (
 )
 
 func IssueToStoryInput(issue github.Issue, projectPageId string) notion.StoryInput {
+	var finishedDate string
+	if issue.ClosedAt != nil {
+		finishedDate = issue.ClosedAt.Format("2006-01-02")
+	}
 	return notion.StoryInput{
 		Name:         issue.Title,
 		Project:      projectPageId,
@@ -16,5 +20,6 @@ func IssueToStoryInput(issue github.Issue, projectPageId string) notion.StoryInp
 		Status:       ComputeStatus(issue),
 		Labels:       issue.Labels,
 		LastWorkedAt: issue.UpdatedAt.Format("2006-01-02"),
+		FinishedDate: finishedDate,
 	}
 }

@@ -28,4 +28,5 @@ type StoryInput struct {
 	Status       string `json:"status"`
 	Labels       []string
 	LastWorkedAt string
+	FinishedDate string
 }

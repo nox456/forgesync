@@ -182,6 +182,14 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun
 		},
 	}
 
+	if storyInput.FinishedDate != "" {
+		baseProps.FinishedDate = &DateProperty{
+			Date: DateValue{
+				Start: storyInput.FinishedDate,
+			},
+		}
+	}
+
 	if existingStory == nil {
 
 		if isDryRun {
