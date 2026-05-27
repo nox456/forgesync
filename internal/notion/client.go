@@ -137,8 +137,8 @@ func (c *Client) FindStoryByIssue(issue github.Issue) (*Story, error) {
 		story.Issue = fmt.Sprintf("%d", result.Properties.Issue.Number)
 		story.CreatedAt = result.Properties.CreatedTime.Date
 		story.Labels = labels
-		story.LastWorkedAt = result.Properties.LastWorkedAt.Date
-		story.FinishedAt = result.Properties.FinishedDate.Date
+		story.LastWorkedAt = result.Properties.LastWorkedAt.Date.Start
+		story.FinishedAt = result.Properties.FinishedDate.Date.Start
 		story.Status = result.Properties.Status.Status.Name
 		story.Priority = result.Properties.Priority.Select.Name
 		story.Project = result.Properties.Project.Relation[0].ID
@@ -175,6 +175,11 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun
 		},
 		Status: &StatusProperty{Status: NamedOption{Name: storyInput.Status}},
 		Labels: &MultiSelectProperty{MultiSelect: labels},
+		LastWorkedAt: &DateProperty{
+			Date: DateValue{
+				Start: storyInput.LastWorkedAt,
+			},
+		},
 	}
 
 	if existingStory == nil {
@@ -229,8 +234,9 @@ func (c *Client) UpsertStory(storyInput StoryInput, issue github.Issue, isDryRun
 		hasSameName := existingStory.Name == storyInput.Name
 		hasSameStatus := existingStory.Status == storyInput.Status
 		hasSameLabels := slices.Equal(existingStory.Labels, storyInput.Labels)
+		hasSameLastWorkedAt := existingStory.LastWorkedAt == storyInput.LastWorkedAt
 
-		if hasSameName && hasSameStatus && hasSameLabels {
+		if hasSameName && hasSameStatus && hasSameLabels && hasSameLastWorkedAt {
 			return &UpsertResult{
 				Unchanged: true,
 			}, nil

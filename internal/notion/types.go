@@ -16,6 +16,10 @@ type RichTextItem struct {
 	PlainText string `json:"plain_text"`
 }
 
+type DateValue struct {
+	Start string `json:"start"`
+}
+
 type RichTextInput struct {
 	Text TextContent `json:"text"`
 }
@@ -45,7 +49,7 @@ type RelationProperty struct {
 }
 
 type DateProperty struct {
-	Date string `json:"date"`
+	Date DateValue `json:"date"`
 }
 
 type CreatedTimeProperty struct {
@@ -114,12 +118,14 @@ type StoryFilterPayload struct {
 }
 
 type StoryProperties struct {
-	Name    *TitleInputProperty  `json:"Name,omitempty"`
-	Project *RelationProperty    `json:"Project,omitempty"`
-	Issue   *NumberProperty      `json:"Issue,omitempty"`
-	URL     *URLProperty         `json:"URL,omitempty"`
-	Status  *StatusProperty      `json:"Status,omitempty"`
-	Labels  *MultiSelectProperty `json:"Labels,omitempty"`
+	Name         *TitleInputProperty  `json:"Name,omitempty"`
+	Project      *RelationProperty    `json:"Project,omitempty"`
+	Issue        *NumberProperty      `json:"Issue,omitempty"`
+	URL          *URLProperty         `json:"URL,omitempty"`
+	Status       *StatusProperty      `json:"Status,omitempty"`
+	Labels       *MultiSelectProperty `json:"Labels,omitempty"`
+	LastWorkedAt *DateProperty        `json:"Last Worked At,omitempty"`
+	FinishedDate *DateProperty        `json:"Finished Date,omitempty"`
 }
 
 type StoryCreatePayload struct {

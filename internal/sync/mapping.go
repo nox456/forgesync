@@ -9,11 +9,12 @@ import (
 
 func IssueToStoryInput(issue github.Issue, projectPageId string) notion.StoryInput {
 	return notion.StoryInput{
-		Name:    issue.Title,
-		Project: projectPageId,
-		Issue:   fmt.Sprintf("%d", issue.Number),
-		Url:     issue.URL,
-		Status:  ComputeStatus(issue),
-		Labels:  issue.Labels,
+		Name:         issue.Title,
+		Project:      projectPageId,
+		Issue:        fmt.Sprintf("%d", issue.Number),
+		Url:          issue.URL,
+		Status:       ComputeStatus(issue),
+		Labels:       issue.Labels,
+		LastWorkedAt: issue.UpdatedAt.Format("2006-01-02"),
 	}
 }

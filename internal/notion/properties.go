@@ -21,10 +21,11 @@ type Story struct {
 }
 
 type StoryInput struct {
-	Name    string `json:"name"`
-	Project string `json:"project"`
-	Issue   string `json:"issue"`
-	Url     string `json:"url"`
-	Status  string `json:"status"`
-	Labels  []string
+	Name         string `json:"name"`
+	Project      string `json:"project"`
+	Issue        string `json:"issue"`
+	Url          string `json:"url"`
+	Status       string `json:"status"`
+	Labels       []string
+	LastWorkedAt string
 }
