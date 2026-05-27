@@ -140,7 +140,6 @@ func (c *Client) FindStoryByIssue(issue github.Issue) (*Story, error) {
 		story.LastWorkedAt = result.Properties.LastWorkedAt.Date.Start
 		story.FinishedAt = result.Properties.FinishedDate.Date.Start
 		story.Status = result.Properties.Status.Status.Name
-		story.Priority = result.Properties.Priority.Select.Name
 		story.Project = result.Properties.Project.Relation[0].ID
 		story.Url = result.Properties.URL.URL
 		story.Name = result.Properties.Name.Title[0].PlainText

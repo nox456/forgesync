@@ -96,7 +96,6 @@ type StoriesDataSourceResponse struct {
 			LastWorkedAt DateProperty        `json:"Last Worked At"`
 			FinishedDate DateProperty        `json:"Finished Date"`
 			Status       StatusProperty      `json:"Status"`
-			Priority     SelectProperty      `json:"Priority"`
 			Project      RelationProperty    `json:"Project"`
 			URL          URLProperty         `json:"URL"`
 			Name         TitleProperty       `json:"Name"`
