@@ -39,7 +39,10 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 
 	var issues []Issue
 
-	issuesResponse := client.Issues.ListAllIssuesIter(ctx, &github.ListAllIssuesOptions{})
+	issuesResponse := client.Issues.ListAllIssuesIter(ctx, &github.ListAllIssuesOptions{
+		State: "all",
+		Since: time.Now().AddDate(0, 0, -30),
+	})
 
 	for issueResponse, err := range issuesResponse {
 		if err != nil {

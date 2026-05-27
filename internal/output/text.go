@@ -37,7 +37,7 @@ func (p *TextPrinter) PrintProjects(projects []notion.Project) {
 func (p *TextPrinter) PrintIssues(issues []github.Issue) {
 	fmt.Println("==== Issues ====")
 
-	fmt.Fprintln(p.printer, "#\tRepo\tTitle\tHas PR")
+	fmt.Fprintln(p.printer, "#\tRepo\tTitle\tState\tHas PR")
 
 	for _, issue := range issues {
 		var hasPR string
@@ -48,10 +48,11 @@ func (p *TextPrinter) PrintIssues(issues []github.Issue) {
 			hasPR = ""
 		}
 
-		fmt.Fprintf(p.printer, "%d\t%s\t%s\t%s\n",
+		fmt.Fprintf(p.printer, "%d\t%s\t%s\t%s\t%s\n",
 			issue.Number,
 			issue.Repo,
 			issue.Title,
+			issue.State,
 			hasPR,
 		)
 	}
