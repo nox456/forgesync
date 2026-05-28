@@ -24,10 +24,11 @@ type Issue struct {
 }
 
 type Report struct {
-	Created   int `json:"created"`
-	Updated   int `json:"updated"`
-	Skipped   int `json:"skipped"`
-	Unchanged int `json:"unchanged"`
+	Created   int      `json:"created"`
+	Updated   int      `json:"updated"`
+	Skipped   int      `json:"skipped"`
+	Unchanged int      `json:"unchanged"`
+	Errors    []string `json:"errors"`
 }
 
 func NewJSONPrinter() *JSONPrinter {
@@ -79,11 +80,18 @@ func (p *JSONPrinter) PrintIssues(issues []github.Issue) {
 }
 
 func (p *JSONPrinter) PrintReport(report *sync.Report) {
+	var errors []string
+
+	for _, error := range report.Errors {
+		errors = append(errors, error.Error)
+	}
+
 	parsedReport := Report{
 		Created:   report.Created,
 		Updated:   report.Updated,
 		Skipped:   report.Skipped,
 		Unchanged: report.Unchanged,
+		Errors:    errors,
 	}
 
 	bytes, err := json.Marshal(struct {
