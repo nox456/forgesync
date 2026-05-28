@@ -29,7 +29,7 @@ func (p *TextPrinter) PrintProjects(projects []notion.Project) {
 
 	err := p.printer.Flush()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 }
@@ -59,7 +59,7 @@ func (p *TextPrinter) PrintIssues(issues []github.Issue) {
 
 	err := p.printer.Flush()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 }
@@ -74,7 +74,7 @@ func (p *TextPrinter) PrintReport(report *sync.Report) {
 
 	err := p.printer.Flush()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 

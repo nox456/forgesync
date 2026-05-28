@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/nox456/forgesync/internal/github"
@@ -15,8 +16,7 @@ type Engine struct {
 }
 
 type EngineRunOptions struct {
-	DryRun     bool
-	JSONOutput bool
+	DryRun bool
 }
 
 type ReportError struct {
@@ -40,9 +40,7 @@ func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine
 }
 
 func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, error) {
-	if !options.JSONOutput {
-		fmt.Println("Fetching notion projects...")
-	}
+	fmt.Fprintln(os.Stderr, "Fetching notion projects...")
 	projects, err := e.NotionClient.ListProjects(ctx)
 	if err != nil {
 		return nil, err
@@ -54,9 +52,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		projectsMap[strings.ToLower(project.Repo)] = project
 	}
 
-	if !options.JSONOutput {
-		fmt.Println("Fetching github issues...")
-	}
+	fmt.Fprintln(os.Stderr, "Fetching github issues...")
 	issues, err := e.GithubClient.FetchAssignedIssues(ctx)
 	if err != nil {
 		return nil, err
@@ -68,9 +64,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	unchanged := 0
 	errors := make([]ReportError, 0)
 
-	if !options.JSONOutput {
-		fmt.Println("Syncing...")
-	}
+	fmt.Fprintln(os.Stderr, "Syncing...")
 	for _, issue := range issues {
 		project, ok := projectsMap[strings.ToLower(issue.Repo)]
 		if !ok {

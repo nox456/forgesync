@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/nox456/forgesync/internal/sync"
 	"github.com/spf13/cobra"
 )
@@ -17,19 +15,18 @@ func init() {
 var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Sync Notion stories with GitHub issuse (use --dry-run to see what would be changed without actually changing anything)",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		engine := sync.NewEngine(NotionClient, GithubClient)
 
 		report, err := engine.Run(cmd.Context(), sync.EngineRunOptions{
-			DryRun:     DryRun,
-			JSONOutput: JSONOutput,
+			DryRun: DryRun,
 		})
 
 		if err != nil {
-			fmt.Println(err)
-			return
+			return err
 		}
 
 		Printer.PrintReport(report)
+		return nil
 	},
 }

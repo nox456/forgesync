@@ -3,6 +3,7 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
@@ -49,7 +50,7 @@ func (p *JSONPrinter) PrintProjects(projects []notion.Project) {
 		Projects []Project `json:"projects"`
 	}{Projects: parsedProjects})
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
@@ -72,7 +73,7 @@ func (p *JSONPrinter) PrintIssues(issues []github.Issue) {
 		Issues []Issue `json:"issues"`
 	}{Issues: parsedIssues})
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
@@ -98,7 +99,7 @@ func (p *JSONPrinter) PrintReport(report *sync.Report) {
 		Report Report `json:"report"`
 	}{Report: parsedReport})
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 

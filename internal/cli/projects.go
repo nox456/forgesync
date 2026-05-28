@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
@@ -13,14 +11,14 @@ func init() {
 var projectsCmd = &cobra.Command{
 	Use:   "projects",
 	Short: "List projects in Notion",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		projects, err := NotionClient.ListProjects(cmd.Context())
 
 		if err != nil {
-			fmt.Println(err)
-			return
+			return err
 		}
 
 		Printer.PrintProjects(projects)
+		return nil
 	},
 }
