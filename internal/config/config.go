@@ -30,19 +30,19 @@ func Load() (*Config, error) {
 	var missingFields []string
 
 	// Validate required fields
-	if viper.Get("github_token") == nil {
+	if viper.GetString("github_token") == "" {
 		missingFields = append(missingFields, "github_token")
 	}
 
-	if viper.Get("notion_token") == nil {
+	if viper.GetString("notion_token") == "" {
 		missingFields = append(missingFields, "notion_token")
 	}
 
-	if viper.Get("projects_source_id") == nil {
+	if viper.GetString("projects_source_id") == "" {
 		missingFields = append(missingFields, "projects_source_id")
 	}
 
-	if viper.Get("stories_source_id") == nil {
+	if viper.GetString("stories_source_id") == "" {
 		missingFields = append(missingFields, "stories_source_id")
 	}
 
