@@ -13,11 +13,13 @@ func init() {
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Print the configuration of ForgeSync",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("Config loaded:")
 		fmt.Println("  GitHub Token:", Config.GitHubToken)
 		fmt.Println("  Notion Token:", Config.NotionToken)
 		fmt.Println("  Projects Source ID:", Config.ProjectsSourceId)
 		fmt.Println("  Stories Source ID:", Config.StoriesSourceId)
+
+		return nil
 	},
 }

@@ -38,8 +38,10 @@ var rootCmd = &cobra.Command{
 		}
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cmd.Help()
+
+		return nil
 	},
 }
 
