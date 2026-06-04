@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 
@@ -97,6 +98,8 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 			return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
 		}
 
+		slog.Debug("notion story created", "issue", createProps.Issue)
+
 		return &UpsertResult{
 			Created: true,
 		}, nil
@@ -146,6 +149,8 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 			b, _ := io.ReadAll(res.Body)
 			return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
 		}
+
+		slog.Debug("notion story updated", "id", existingStory.PageID)
 
 		return &UpsertResult{
 			Updated: true,

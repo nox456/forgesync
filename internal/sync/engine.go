@@ -2,8 +2,7 @@ package sync
 
 import (
 	"context"
-	"fmt"
-	"os"
+	"log/slog"
 	"strings"
 
 	"github.com/nox456/forgesync/internal/github"
@@ -40,7 +39,7 @@ func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine
 }
 
 func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, error) {
-	fmt.Fprintln(os.Stderr, "Fetching notion projects...")
+	slog.Info("Fetching notion projects...")
 	projects, err := e.NotionClient.ListProjects(ctx)
 	if err != nil {
 		return nil, err
@@ -52,7 +51,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		projectsMap[strings.ToLower(project.Repo)] = project
 	}
 
-	fmt.Fprintln(os.Stderr, "Fetching github issues...")
+	slog.Info("Fetching github issues...")
 	issues, err := e.GithubClient.FetchAssignedIssues(ctx)
 	if err != nil {
 		return nil, err
@@ -64,7 +63,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	unchanged := 0
 	errors := make([]ReportError, 0)
 
-	fmt.Fprintln(os.Stderr, "Syncing...")
+	slog.Info("Syncing...")
 	for _, issue := range issues {
 		project, ok := projectsMap[strings.ToLower(issue.Repo)]
 		if !ok {
@@ -75,6 +74,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		storyInput := IssueToStoryInput(issue, project.PageID)
 		result, err := e.NotionClient.UpsertStory(ctx, storyInput, issue, options.DryRun)
 		if err != nil {
+			slog.Error(err.Error())
 			errors = append(errors, ReportError{
 				IssueNumber: issue.Number,
 				Error:       err.Error(),

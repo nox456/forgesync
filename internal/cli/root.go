@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/nox456/forgesync/internal/config"
@@ -16,6 +17,7 @@ var Printer output.Printer
 var Config *config.Config
 var GithubClient *github.Client
 var NotionClient *notion.Client
+var Verbose bool
 
 var rootCmd = &cobra.Command{
 	Use:   "forgesync",
@@ -36,6 +38,13 @@ var rootCmd = &cobra.Command{
 		} else {
 			Printer = output.NewTextPrinter()
 		}
+
+		if Verbose {
+			slog.SetLogLoggerLevel(slog.LevelDebug)
+		} else {
+			slog.SetLogLoggerLevel(slog.LevelInfo)
+		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -54,4 +63,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&JSONOutput, "json", "", false, "Output in JSON format")
+	rootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "", false, "Verbose output")
 }
