@@ -10,41 +10,52 @@ One-way sync (GitHub → Notion), run on demand. No daemon, no webhooks.
 
 ## What it does
 
-For every issue assigned to you on GitHub, `forgesync` will:
+For every issue assigned to you on GitHub (updated in the last 30 days, pull
+requests excluded), `forgesync` will:
 
 1. Look up the issue's repo (`owner/name`) in your **Project Manager** database
    via the `repo` text field.
 2. If a matching Project exists, upsert a row in the **Stories** database
    linked to that Project. If no Project matches, the issue is skipped.
-3. Keep the Story's `Name`, `URL`, `Labels`, `Status`, `Last Worked At`, and
-   `Finished Date` in sync with the GitHub issue.
+3. Keep the Story's `Name`, `Labels`, `Status`, `Last Worked At`, and
+   `Finished Date` in sync with the GitHub issue. The `URL`, `Issue` number, and
+   `Project` relation are set once, when the Story is first created.
 
-The sync key is the pair `(Project, Issue number)` — running `forgesync sync`
-repeatedly is safe and idempotent.
+The sync key is the GitHub **issue number**: `forgesync` looks up an existing
+Story by its `Issue` number and updates it, otherwise it creates one. Running
+`forgesync sync` repeatedly is safe and idempotent. A Story whose `Name`,
+`Status`, `Labels`, and `Last Worked At` already match is reported as
+`Unchanged` and left untouched.
 
 ### Status mapping
 
-| GitHub state              | Notion `Status` |
-| ------------------------- | --------------- |
-| Closed                    | `Done`          |
-| Open, with a linked PR    | `In PR`         |
-| Open, no linked PR        | `In progress`   |
+| GitHub issue state | Linked PR? | Notion `Status` |
+| ------------------ | ---------- | --------------- |
+| Open               | no         | `In progress`   |
+| Open               | yes        | `In PR`         |
+| Closed             | yes        | `Done`          |
+| Closed             | no         | `Cancelled`     |
 
-Linked-PR detection uses GitHub's GraphQL `timelineItems` (`CONNECTED_EVENT`
-and `CROSS_REFERENCED_EVENT`).
+Any other/unknown state falls back to `Not started`.
+
+Linked-PR detection walks the issue's REST timeline
+(`ListIssueTimeline`) and counts `connected` minus `disconnected` events; a
+positive total means a PR is linked.
 
 ### What it does NOT touch
 
 - The issue body / page content
-- The `Prioridad` property (you own this in Notion)
+- The `URL`, `Issue`, and `Project` relation after the Story is created
+- Any property not listed above (e.g. `Prioridad` — you own this in Notion)
 - The `Created time` property (auto-managed by Notion)
-- `Finished Date` if already set (manual edits are preserved)
+- `Finished Date` while the issue is still open (when the issue is closed, it is
+  set from `closed_at`)
 
 ---
 
 ## Requirements
 
-- Go 1.22 or later
+- Go 1.26 or later
 - A GitHub personal access token with `repo` scope (classic) or the equivalent
   fine-grained permissions (`Issues: read`, `Pull requests: read`,
   `Metadata: read` on the repos you care about)
@@ -57,13 +68,13 @@ and `CROSS_REFERENCED_EVENT`).
 ## Install
 
 ```sh
-go install github.com/yourname/forgesync/cmd/forgesync@latest
+go install github.com/nox456/forgesync/cmd/forgesync@latest
 ```
 
 Or build from source:
 
 ```sh
-git clone https://github.com/yourname/forgesync.git
+git clone https://github.com/nox456/forgesync.git
 cd forgesync
 go build -o forgesync ./cmd/forgesync
 ```
@@ -72,49 +83,66 @@ go build -o forgesync ./cmd/forgesync
 
 ## Configuration
 
-`forgesync` reads configuration from, in order of precedence:
+`forgesync` reads configuration from a YAML file at
+`$XDG_CONFIG_HOME/forgesync/config.yaml` (commonly
+`~/.config/forgesync/config.yaml`, provided `XDG_CONFIG_HOME` is set).
+Environment variables prefixed with `FORGESYNC_` override the file's values.
 
-1. Environment variables (highest precedence)
-2. `$XDG_CONFIG_HOME/forgesync/config.yaml` (or `~/.config/forgesync/config.yaml`)
-3. `./forgesync.yaml` in the working directory
+> **Note:** a config file must exist — the CLI errors out if it cannot find
+> one, even when every value is also provided through environment variables.
 
 ### Required values
 
-| Key                       | Env var                              | Description                                  |
-| ------------------------- | ------------------------------------ | -------------------------------------------- |
-| `github_token`            | `FORGESYNC_GITHUB_TOKEN`             | GitHub personal access token                 |
-| `notion_token`            | `FORGESYNC_NOTION_TOKEN`             | Notion integration token                     |
-| `projects_data_source_id` | `FORGESYNC_PROJECTS_DATA_SOURCE_ID`  | UUID of the Project Manager database         |
-| `stories_data_source_id`  | `FORGESYNC_STORIES_DATA_SOURCE_ID`   | UUID of the Stories database                 |
+| Key                  | Env var                         | Description                                       |
+| -------------------- | ------------------------------- | ------------------------------------------------- |
+| `github_token`       | `FORGESYNC_GITHUB_TOKEN`        | GitHub personal access token                      |
+| `notion_token`       | `FORGESYNC_NOTION_TOKEN`        | Notion integration token                          |
+| `projects_source_id` | `FORGESYNC_PROJECTS_SOURCE_ID`  | Data source ID of the Project Manager database    |
+| `stories_source_id`  | `FORGESYNC_STORIES_SOURCE_ID`   | Data source ID of the Stories database            |
 
 ### Example `config.yaml`
 
 ```yaml
 github_token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 notion_token: ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-projects_data_source_id: 2fbb053d-a558-8039-9bd5-000bec9a0d57
-stories_data_source_id: 362b053d-a558-80b7-95fb-000bc69d7347
+projects_source_id: 2fbb053d-a558-8039-9bd5-000bec9a0d57
+stories_source_id: 362b053d-a558-80b7-95fb-000bc69d7347
 ```
 
-### Example env-only setup
+### Overriding with environment variables
 
 ```sh
 export FORGESYNC_GITHUB_TOKEN=ghp_...
 export FORGESYNC_NOTION_TOKEN=ntn_...
-export FORGESYNC_PROJECTS_DATA_SOURCE_ID=2fbb053d-a558-8039-9bd5-000bec9a0d57
-export FORGESYNC_STORIES_DATA_SOURCE_ID=362b053d-a558-80b7-95fb-000bc69d7347
+export FORGESYNC_PROJECTS_SOURCE_ID=2fbb053d-a558-8039-9bd5-000bec9a0d57
+export FORGESYNC_STORIES_SOURCE_ID=362b053d-a558-80b7-95fb-000bc69d7347
 ```
 
 ---
 
 ## Usage
 
+### Global flags
+
+| Flag        | Description                          |
+| ----------- | ------------------------------------ |
+| `--json`    | Print output as JSON                 |
+| `--verbose` | Enable debug-level logging           |
+
 ### Sanity check — list Projects
 
 Confirms your tokens and IDs work before you sync anything.
 
 ```sh
-forgesync projects list
+forgesync projects
+```
+
+### List assigned issues
+
+Shows the GitHub issues `forgesync` would consider, with their linked-PR status.
+
+```sh
+forgesync issues
 ```
 
 ### Dry run — preview what would happen
@@ -122,7 +150,7 @@ forgesync projects list
 No writes to Notion. Just prints the planned actions.
 
 ```sh
-forgesync sync --dry-run
+forgesync sync --dry-run   # or -d
 ```
 
 ### Real sync
@@ -131,10 +159,16 @@ forgesync sync --dry-run
 forgesync sync
 ```
 
-### Verbose output
+### Inspect the loaded configuration
 
 ```sh
-forgesync sync --verbose
+forgesync config
+```
+
+### Print the version
+
+```sh
+forgesync version
 ```
 
 ---
@@ -148,22 +182,23 @@ loudly rather than silently corrupt data.
 
 | Property | Type   | Required | Purpose                                    |
 | -------- | ------ | -------- | ------------------------------------------ |
-| `Nombre` | Title  | yes      | Project name                               |
+| `name`   | Title  | yes      | Project name                               |
 | `repo`   | Text   | yes      | GitHub repo as `owner/name` (the bridge)   |
 
 ### Stories database
 
-| Property         | Type         | Required | Purpose                                       |
-| ---------------- | ------------ | -------- | --------------------------------------------- |
-| `Name`           | Title        | yes      | Issue title                                   |
-| `Issue`          | Number       | yes      | GitHub issue number (part of the sync key)    |
-| `URL`            | URL          | yes      | Link back to the GitHub issue                 |
-| `Status`         | Status       | yes      | One of: `Not started`, `In progress`, `In PR`, `Done` |
-| `Labels`         | Multi-select | yes      | Mirrored from GitHub labels                   |
-| `Last Worked At` | Date         | yes      | Mirrored from the issue's `updated_at`        |
-| `Finished Date`  | Date         | yes      | Set from `closed_at` when issue is closed     |
-| `⌨️ Project`     | Relation     | yes      | Relation to Project Manager (limit 1)         |
-| `Prioridad`      | Select       | optional | User-managed; never touched by sync           |
+| Property         | Type         | Required | Purpose                                                      |
+| ---------------- | ------------ | -------- | ------------------------------------------------------------ |
+| `Name`           | Title        | yes      | Issue title                                                  |
+| `Issue`          | Number       | yes      | GitHub issue number (the sync key)                           |
+| `URL`            | URL          | yes      | Link back to the GitHub issue                                |
+| `Status`         | Status       | yes      | One of: `Not started`, `In progress`, `In PR`, `Done`, `Cancelled` |
+| `Labels`         | Multi-select | yes      | Mirrored from GitHub labels                                  |
+| `Last Worked At` | Date         | yes      | Mirrored from the issue's `updated_at`                       |
+| `Finished Date`  | Date         | yes      | Set from `closed_at` when the issue is closed                |
+| `Project`        | Relation     | yes      | Relation to Project Manager (limit 1)                        |
+| `Created time`   | Created time | yes      | Auto-managed by Notion                                       |
+| `Prioridad`      | Select       | optional | User-managed; never touched by sync                          |
 
 ---
 
@@ -173,11 +208,12 @@ loudly rather than silently corrupt data.
 forgesync/
 ├── cmd/forgesync/         # CLI entry point
 └── internal/
+    ├── cli/               # cobra commands
     ├── config/            # env + file config loading
-    ├── github/            # GitHub adapter (REST + GraphQL)
-    ├── notion/            # Notion adapter (reads + writes)
-    ├── sync/              # orchestration & status mapping rules
-    └── cli/               # cobra commands
+    ├── github/            # GitHub adapter (issues + REST timeline)
+    ├── notion/            # Notion adapter (data sources API: reads + writes)
+    ├── output/            # text & JSON printers
+    └── sync/              # orchestration & status mapping rules
 ```
 
 Each `internal/` package is independent: `internal/sync` only depends on
@@ -188,12 +224,19 @@ the underlying SDKs directly. Swapping an SDK is a one-package change.
 
 ## Limitations & known caveats
 
+- **30-day window.** Only issues updated in the last 30 days are fetched.
+  Older issues are not synced.
+- **Issue numbers must be unique across synced repos.** The sync key is the
+  GitHub issue number alone. If two of your synced repos share an issue number,
+  the sync errors out (`found more than one story for issue N`) or updates the
+  wrong Story.
 - **Rate limits.** Notion limits writes to ~3 req/s. For a typical personal
   workspace this is well under the threshold. If you have hundreds of issues
   you may want to add backoff.
-- **Linked-PR detection is heuristic.** A PR that doesn't use a closing
-  keyword (`Closes #123`) may not be detected via `timelineItems`.
-- **Time zones.** All timestamps are stored in UTC. Notion displays them in
+- **Linked-PR detection is heuristic.** A PR that isn't surfaced as a
+  `connected` timeline event (for example, one that only mentions the issue
+  without a closing keyword) may not be detected.
+- **Time zones.** All dates are stored as `YYYY-MM-DD`. Notion displays them in
   your local time zone.
 - **Manual `Status` edits in Notion are overwritten.** If you set a Story to
   `Done` manually but the GitHub issue is still open, the next sync will
@@ -203,9 +246,8 @@ the underlying SDKs directly. Swapping an SDK is a one-package change.
 
 ## Roadmap
 
-- [ ] Unit tests on `sync/mapping` and `sync/status`
-- [ ] Structured logging via `log/slog`
-- [ ] `--since` flag to limit fetches to recently updated issues
+- [x] Unit tests on `sync/mapping` and `sync/status`
+- [x] Structured logging via `log/slog`
+- [ ] Configurable fetch window (currently a fixed 30 days)
 - [ ] Cache the Projects map between runs
 - [ ] Optional `--repo owner/name` flag to sync a single repo
-
