@@ -67,11 +67,57 @@ positive total means a PR is linked.
 
 ## Install
 
+### Install script (Linux & macOS)
+
+The quickest path. It downloads the prebuilt binary for your platform from the
+latest GitHub release, verifies its checksum, and installs it system-wide:
+
+```sh
+curl -fsSL https://github.com/nox456/forgesync/releases/latest/download/install.sh | sh
+```
+
+Pick a specific version or a different install location with environment
+variables:
+
+```sh
+curl -fsSL https://github.com/nox456/forgesync/releases/latest/download/install.sh \
+  | FORGESYNC_VERSION=v0.1.0 FORGESYNC_INSTALL_DIR="$HOME/.local/bin" sh
+```
+
+> **Caveats**
+>
+> - **Linux and macOS only.** The script resolves `linux`/`darwin` and
+>   `amd64`/`arm64`. On Windows, use `go install` or download the `.zip` from the
+>   [releases page](https://github.com/nox456/forgesync/releases).
+> - **It pipes remote code into your shell.** Convenient, but it runs unreviewed.
+>   To inspect before running, download it first:
+>   ```sh
+>   curl -fsSL -o install.sh \
+>     https://github.com/nox456/forgesync/releases/latest/download/install.sh
+>   less install.sh   # read it
+>   sh install.sh     # then run it
+>   ```
+> - **`sudo` may be requested.** The default install directory is
+>   `/usr/local/bin`; if it isn't writable, the script falls back to `sudo`. Set
+>   `FORGESYNC_INSTALL_DIR` to a writable path (e.g. `~/.local/bin`) to avoid
+>   that — just make sure it's on your `PATH`.
+> - **`FORGESYNC_VERSION` controls the binary, not the script URL.** Pinning the
+>   *script* URL to a tag does not pin the *binary*; set the env var for a
+>   specific version. The default is the latest release.
+> - **Needs `curl` (or `wget`) and `tar`.** Checksum verification additionally
+>   uses `sha256sum` or `shasum`; if neither is found, verification is skipped
+>   with a warning rather than failing.
+
+### With Go
+
 ```sh
 go install github.com/nox456/forgesync/cmd/forgesync@latest
 ```
 
-Or build from source:
+Replace `@latest` with a tag (e.g. `@v0.1.0`) to pin a version. This compiles
+from source, so the resulting binary depends on your local Go toolchain.
+
+### From source
 
 ```sh
 git clone https://github.com/nox456/forgesync.git

@@ -31,3 +31,7 @@ changelog:
   sort: asc
   filters:
     exclude: ['^docs', '^test', '^chore', '^refactor']
+
+release:
+  extra_files:
+    - glob: ./install.sh
