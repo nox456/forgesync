@@ -9,9 +9,18 @@ import (
 	"github.com/nox456/forgesync/internal/notion"
 )
 
+type Notion interface {
+	ListProjects(ctx context.Context) ([]notion.Project, error)
+	UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool) (*notion.UpsertResult, error)
+}
+
+type Github interface {
+	FetchAssignedIssues(ctx context.Context) ([]github.Issue, error)
+}
+
 type Engine struct {
-	NotionClient *notion.Client
-	GithubClient *github.Client
+	NotionClient Notion
+	GithubClient Github
 }
 
 type EngineRunOptions struct {
