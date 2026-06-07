@@ -14,7 +14,8 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of ForgeSync",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("v0.0.1")
+		// TODO: replace this with a package-level variable
+		fmt.Println("v0.1.0")
 
 		return nil
 	},
