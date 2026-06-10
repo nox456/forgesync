@@ -15,6 +15,9 @@ func ComputeStatus(issue github.Issue, previousStatus string) string {
 		}
 		return previousStatus
 	case "closed":
+		if previousStatus == "Cancelled" {
+			return "Cancelled"
+		}
 		if issue.HasLinkedPR {
 			return "Done"
 		}
