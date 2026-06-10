@@ -16,11 +16,12 @@ func TestIssueToStoryInput(t *testing.T) {
 	cases := []struct {
 		name          string
 		issue         github.Issue
+		existingStory *notion.Story
 		projectPageId string
 		want          notion.StoryInput
 	}{
 		{
-			name: "basic open issue maps fields and leaves finished date empty",
+			name: "basic open issue with no existing story defaults to not started",
 			issue: github.Issue{
 				Number:    42,
 				Title:     "Add login flow",
@@ -29,6 +30,29 @@ func TestIssueToStoryInput(t *testing.T) {
 				Labels:    []string{"feature", "frontend"},
 				UpdatedAt: updatedAt,
 			},
+			projectPageId: "project-page-1",
+			want: notion.StoryInput{
+				Name:         "Add login flow",
+				Project:      "project-page-1",
+				Issue:        "42",
+				Url:          "https://github.com/owner/repo/issues/42",
+				Status:       "Not started",
+				Labels:       []string{"feature", "frontend"},
+				LastWorkedAt: "2026-05-20 10:30",
+				FinishedDate: "",
+			},
+		},
+		{
+			name: "open issue preserves the manual status of an existing story",
+			issue: github.Issue{
+				Number:    42,
+				Title:     "Add login flow",
+				URL:       "https://github.com/owner/repo/issues/42",
+				State:     "open",
+				Labels:    []string{"feature", "frontend"},
+				UpdatedAt: updatedAt,
+			},
+			existingStory: &notion.Story{Status: "In progress"},
 			projectPageId: "project-page-1",
 			want: notion.StoryInput{
 				Name:         "Add login flow",
@@ -81,7 +105,7 @@ func TestIssueToStoryInput(t *testing.T) {
 				Project:      "project-page-3",
 				Issue:        "1",
 				Url:          "https://github.com/owner/repo/issues/1",
-				Status:       "In progress",
+				Status:       "Not started",
 				Labels:       []string{},
 				LastWorkedAt: "2026-05-20 10:30",
 				FinishedDate: "",
@@ -91,7 +115,7 @@ func TestIssueToStoryInput(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := IssueToStoryInput(tc.issue, tc.projectPageId)
+			got := IssueToStoryInput(tc.issue, tc.existingStory, tc.projectPageId)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("IssueToStoryInput mismatch (-want +got):\n%s", diff)
 			}

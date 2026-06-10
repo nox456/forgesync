@@ -27,14 +27,24 @@ type fakeNotion struct {
 	// upsert returns the result for a given issue. It is only invoked for
 	// issues whose repo matches a project.
 	upsert func(issue github.Issue) (*notion.UpsertResult, error)
-	calls  []upsertCall
+	// findStory returns the existing story for an issue. When nil, no story
+	// is found (nil, nil).
+	findStory func(issue github.Issue) (*notion.Story, error)
+	calls     []upsertCall
 }
 
 func (f *fakeNotion) ListProjects(ctx context.Context) ([]notion.Project, error) {
 	return f.projects, f.projectsErr
 }
 
-func (f *fakeNotion) UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool) (*notion.UpsertResult, error) {
+func (f *fakeNotion) FindStoryByIssue(ctx context.Context, issue github.Issue) (*notion.Story, error) {
+	if f.findStory == nil {
+		return nil, nil
+	}
+	return f.findStory(issue)
+}
+
+func (f *fakeNotion) UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool, existingStory *notion.Story) (*notion.UpsertResult, error) {
 	f.calls = append(f.calls, upsertCall{storyInput: storyInput, issue: issue, isDryRun: isDryRun})
 	return f.upsert(issue)
 }
@@ -236,7 +246,7 @@ func TestEngineRunBuildsStoryInputAndPassesDryRun(t *testing.T) {
 		if diff := cmp.Diff(issue, call.issue); diff != "" {
 			t.Errorf("UpsertStory issue mismatch (-want +got):\n%s", diff)
 		}
-		wantInput := IssueToStoryInput(issue, "page-1")
+		wantInput := IssueToStoryInput(issue, nil, "page-1")
 		if diff := cmp.Diff(wantInput, call.storyInput); diff != "" {
 			t.Errorf("UpsertStory storyInput mismatch (-want +got):\n%s", diff)
 		}

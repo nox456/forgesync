@@ -9,14 +9,21 @@ import (
 
 func TestComputeStatus(t *testing.T) {
 	cases := []struct {
-		name  string
-		issue github.Issue
-		want  string
+		name           string
+		issue          github.Issue
+		previousStatus string
+		want           string
 	}{
 		{
-			name:  "open without linked PR is in progress",
+			name:  "open without linked PR and no previous status defaults to not started",
 			issue: github.Issue{State: "open", HasLinkedPR: false},
-			want:  "In progress",
+			want:  "Not started",
+		},
+		{
+			name:           "open without linked PR preserves a previous manual status",
+			issue:          github.Issue{State: "open", HasLinkedPR: false},
+			previousStatus: "In progress",
+			want:           "In progress",
 		},
 		{
 			name:  "open with linked PR is in PR",
@@ -42,7 +49,7 @@ func TestComputeStatus(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ComputeStatus(tc.issue)
+			got := ComputeStatus(tc.issue, tc.previousStatus)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("ComputeStatus(%+v) mismatch (-want +got):\n%s", tc.issue, diff)
 			}
