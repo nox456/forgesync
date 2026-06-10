@@ -13,6 +13,9 @@ type Config struct {
 	StoriesSourceId  string
 }
 
+
+// jaaj nose
+
 func Load() (*Config, error) {
 	// Load env vars
 	viper.SetEnvPrefix("FORGESYNC")
