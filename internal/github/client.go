@@ -20,6 +20,7 @@ type Issue struct {
 	Labels      []string
 	Repo        string
 	UpdatedAt   time.Time
+	CreatedAt   time.Time
 	ClosedAt    *time.Time
 	HasLinkedPR bool
 }
@@ -79,6 +80,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 			Labels:      issueLabels,
 			Repo:        fmt.Sprintf("%s/%s", owner, repo),
 			UpdatedAt:   (*issueResponse.UpdatedAt).Time,
+			CreatedAt:   (*issueResponse.CreatedAt).Time,
 			ClosedAt:    closedAt,
 			HasLinkedPR: hasLinkedPR,
 		}

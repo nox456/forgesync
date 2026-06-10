@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/nox456/forgesync/internal/github"
 )
@@ -133,12 +134,30 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue) (*Sto
 			labels[i] = label.Name
 		}
 
+		notionTimeLayout := "2006-01-02T15:04:05.000+00:00"
+
+		lastWorkedAt, err := time.Parse(notionTimeLayout, result.Properties.LastWorkedAt.Date.Start)
+		if err != nil {
+			return nil, err
+		}
+
+		var finishedAt string
+
+		if result.Properties.FinishedDate.Date.Start != "" {
+			parsedDinishedAt, err := time.Parse(notionTimeLayout, result.Properties.FinishedDate.Date.Start)
+			if err != nil {
+				return nil, err
+			}
+
+			finishedAt = parsedDinishedAt.Format("2006-01-02 15:04")
+		}
+
 		story.PageID = result.ID
 		story.Issue = fmt.Sprintf("%d", result.Properties.Issue.Number)
 		story.CreatedAt = result.Properties.CreatedTime.Date
 		story.Labels = labels
-		story.LastWorkedAt = result.Properties.LastWorkedAt.Date.Start
-		story.FinishedAt = result.Properties.FinishedDate.Date.Start
+		story.LastWorkedAt = lastWorkedAt.Format("2006-01-02 15:04")
+		story.FinishedAt = finishedAt
 		story.Status = result.Properties.Status.Status.Name
 		story.Project = result.Properties.Project.Relation[0].ID
 		story.Url = result.Properties.URL.URL

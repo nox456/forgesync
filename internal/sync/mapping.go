@@ -10,7 +10,7 @@ import (
 func IssueToStoryInput(issue github.Issue, projectPageId string) notion.StoryInput {
 	var finishedDate string
 	if issue.ClosedAt != nil {
-		finishedDate = issue.ClosedAt.Format("2006-01-02")
+		finishedDate = issue.ClosedAt.Format("2006-01-02 15:04")
 	}
 	return notion.StoryInput{
 		Name:         issue.Title,
@@ -19,7 +19,7 @@ func IssueToStoryInput(issue github.Issue, projectPageId string) notion.StoryInp
 		Url:          issue.URL,
 		Status:       ComputeStatus(issue),
 		Labels:       issue.Labels,
-		LastWorkedAt: issue.UpdatedAt.Format("2006-01-02"),
+		LastWorkedAt: issue.UpdatedAt.Format("2006-01-02 15:04"),
 		FinishedDate: finishedDate,
 	}
 }
