@@ -19,13 +19,7 @@ type UpsertResult struct {
 	Unchanged bool
 }
 
-func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue github.Issue, isDryRun bool) (*UpsertResult, error) {
-	existingStory, err := c.FindStoryByIssue(ctx, issue)
-
-	if err != nil {
-		return nil, err
-	}
-
+func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue github.Issue, isDryRun bool, existingStory *Story) (*UpsertResult, error) {
 	labels := make([]NamedOption, len(storyInput.Labels))
 	for i, l := range storyInput.Labels {
 		labels[i] = NamedOption{Name: l}

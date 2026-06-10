@@ -1,14 +1,19 @@
 package sync
 
-import "github.com/nox456/forgesync/internal/github"
+import (
+	"github.com/nox456/forgesync/internal/github"
+)
 
-func ComputeStatus(issue github.Issue) string {
+func ComputeStatus(issue github.Issue, previousStatus string) string {
 	switch issue.State {
 	case "open":
 		if issue.HasLinkedPR {
 			return "In PR"
 		}
-		return "In progress"
+		if previousStatus == "" {
+			return "Not started"
+		}
+		return previousStatus
 	case "closed":
 		if issue.HasLinkedPR {
 			return "Done"

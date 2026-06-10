@@ -11,7 +11,8 @@ import (
 
 type Notion interface {
 	ListProjects(ctx context.Context) ([]notion.Project, error)
-	UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool) (*notion.UpsertResult, error)
+	UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool, existingStory *notion.Story) (*notion.UpsertResult, error)
+	FindStoryByIssue(ctx context.Context, issue github.Issue) (*notion.Story, error)
 }
 
 type Github interface {
@@ -80,8 +81,14 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 			continue
 		}
 
-		storyInput := IssueToStoryInput(issue, project.PageID)
-		result, err := e.NotionClient.UpsertStory(ctx, storyInput, issue, options.DryRun)
+		existingStory, err := e.NotionClient.FindStoryByIssue(ctx, issue)
+
+		if err != nil {
+			return nil, err
+		}
+
+		storyInput := IssueToStoryInput(issue, existingStory, project.PageID)
+		result, err := e.NotionClient.UpsertStory(ctx, storyInput, issue, options.DryRun, existingStory)
 		if err != nil {
 			slog.Error(err.Error())
 			errors = append(errors, ReportError{
