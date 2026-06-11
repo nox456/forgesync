@@ -17,8 +17,9 @@ requests excluded), `forgesync` will:
    via the `repo` text field.
 2. If a matching Project exists, upsert a row in the **Stories** database
    linked to that Project. If no Project matches, the issue is skipped.
-3. Keep the Story's `Name`, `Labels`, `Status`, `Last Worked At`, and
-   `Finished Date` in sync with the GitHub issue. The `URL`, `Issue` number, and
+3. Keep the Story's `Name`, `Labels`, `Last Worked At`, and `Finished Date` in
+   sync with the GitHub issue, and compute its `Status` from the issue state
+   (see [Status mapping](#status-mapping)). The `URL`, `Issue` number, and
    `Project` relation are set once, when the Story is first created.
 
 The sync key is the GitHub **issue number**: `forgesync` looks up an existing
@@ -29,14 +30,29 @@ Story by its `Issue` number and updates it, otherwise it creates one. Running
 
 ### Status mapping
 
+When a Story is **first created**, its `Status` is derived purely from the
+GitHub issue:
+
 | GitHub issue state | Linked PR? | Notion `Status` |
 | ------------------ | ---------- | --------------- |
-| Open               | no         | `In progress`   |
+| Open               | no         | `Not started`   |
 | Open               | yes        | `In PR`         |
 | Closed             | yes        | `Done`          |
 | Closed             | no         | `Cancelled`     |
 
 Any other/unknown state falls back to `Not started`.
+
+On later syncs the **previous Notion status is folded in**, so some manual
+edits survive instead of being overwritten:
+
+- An **open** issue with a linked PR is always `In PR` — a PR wins over any
+  manual status.
+- An **open** issue with no linked PR keeps whatever status the Story already
+  has, so a manual `In progress` (or `Done`) is preserved. Only a brand-new
+  Story defaults to `Not started`.
+- A **closed** issue you previously set to `Cancelled` stays `Cancelled`, even
+  if a PR is later linked.
+- Any other closed issue becomes `Done` (linked PR) or `Cancelled` (no PR).
 
 Linked-PR detection walks the issue's REST timeline
 (`ListIssueTimeline`) and counts `connected` minus `disconnected` events; a
@@ -282,11 +298,15 @@ the underlying SDKs directly. Swapping an SDK is a one-package change.
 - **Linked-PR detection is heuristic.** A PR that isn't surfaced as a
   `connected` timeline event (for example, one that only mentions the issue
   without a closing keyword) may not be detected.
-- **Time zones.** All dates are stored as `YYYY-MM-DD`. Notion displays them in
-  your local time zone.
-- **Manual `Status` edits in Notion are overwritten.** If you set a Story to
-  `Done` manually but the GitHub issue is still open, the next sync will
-  revert it. (This is intentional — GitHub is the source of truth.)
+- **Time zones.** Dates are written as `YYYY-MM-DD HH:MM` in UTC (the timezone
+  offset is dropped). Notion displays them in your local time zone, so a value
+  can read a few hours — or a day — off from the GitHub timestamp.
+- **Manual `Status` edits are partly preserved.** The sync folds your existing
+  Notion status into the result, so a manual status on an open issue with no
+  linked PR survives, and a closed issue you set to `Cancelled` stays
+  `Cancelled`. A linked PR still wins, though: an open issue with a PR is forced
+  to `In PR` regardless of what you set. Other fields (`Name`, `Labels`,
+  `Last Worked At`, `Finished Date`) are always refreshed from GitHub.
 
 ---
 
