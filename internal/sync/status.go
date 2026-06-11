@@ -27,10 +27,7 @@ func ComputeStatus(issue github.Issue, previousStatus string) string {
 		if previousStatus == "Cancelled" {
 			return "Cancelled"
 		}
-		if issue.HasLinkedPR {
-			return "Done"
-		}
-		return "Cancelled"
+		return "Done"
 	}
 
 	return "Not started"
