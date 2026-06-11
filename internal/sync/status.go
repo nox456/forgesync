@@ -7,6 +7,12 @@ import (
 func ComputeStatus(issue github.Issue, previousStatus string) string {
 	switch issue.State {
 	case "open":
+		if previousStatus == "Done" {
+			return "Done"
+		}
+		if previousStatus == "Cancelled" {
+			return "Cancelled"
+		}
 		if issue.HasLinkedPR {
 			return "In PR"
 		}
@@ -15,6 +21,9 @@ func ComputeStatus(issue github.Issue, previousStatus string) string {
 		}
 		return previousStatus
 	case "closed":
+		if previousStatus == "Done" {
+			return "Done"
+		}
 		if previousStatus == "Cancelled" {
 			return "Cancelled"
 		}
