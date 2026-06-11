@@ -15,10 +15,10 @@ func ComputeStatus(issue github.Issue, previousStatus string) string {
 		}
 		return previousStatus
 	case "closed":
-		if previousStatus == "Not started" || previousStatus == "In progress" {
-			return "Done"
+		if previousStatus == "Cancelled" {
+			return "Cancelled"
 		}
-		return previousStatus
+		return "Done"
 	}
 
 	return "Not started"

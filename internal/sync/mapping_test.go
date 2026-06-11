@@ -66,7 +66,7 @@ func TestIssueToStoryInput(t *testing.T) {
 			},
 		},
 		{
-			name: "closed issue with linked PR sets finished date and done status",
+			name: "closed issue in progress sets finished date and done status",
 			issue: github.Issue{
 				Number:      7,
 				Title:       "Fix race condition",
@@ -77,6 +77,7 @@ func TestIssueToStoryInput(t *testing.T) {
 				ClosedAt:    &closedAt,
 				HasLinkedPR: true,
 			},
+			existingStory: &notion.Story{Status: "In progress"},
 			projectPageId: "project-page-2",
 			want: notion.StoryInput{
 				Name:         "Fix race condition",
