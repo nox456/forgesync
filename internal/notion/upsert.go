@@ -68,6 +68,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 		createPayload := &StoryCreatePayload{
 			Parent:     PageParent{DataSourceID: c.StoriesSourceId},
 			Properties: createProps,
+			Markdown:   storyInput.Body,
 		}
 
 		body, err := json.Marshal(createPayload)
@@ -144,7 +145,36 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 			return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
 		}
 
-		slog.Debug("notion story updated", "id", existingStory.PageID)
+		if storyInput.Body != "" {
+			slog.Debug("[SYNC]: Updating story body")
+			url = fmt.Sprintf("%s/pages/%s/markdown", notionBaseUrl, existingStory.PageID)
+
+			updateMarkdownPayload := &StoryMarkdownUpdatePayload{
+				Type:           "replace_content",
+				ReplaceContent: ReplaceContent{NewStr: storyInput.Body},
+			}
+			body, err = json.Marshal(updateMarkdownPayload)
+			if err != nil {
+				return nil, err
+			}
+
+			req, _ = http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(body))
+
+			req.Header.Add("Notion-Version", notionApiVersion)
+			req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
+			req.Header.Add("Content-Type", "application/json")
+
+			res, err = http.DefaultClient.Do(req)
+			if err != nil {
+				return nil, err
+			}
+			defer res.Body.Close()
+
+			if res.StatusCode >= 400 {
+				b, _ := io.ReadAll(res.Body)
+				return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
+			}
+		}
 
 		return &UpsertResult{
 			Updated: true,

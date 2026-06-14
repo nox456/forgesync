@@ -12,6 +12,7 @@ type Story struct {
 	Project      string   `json:"project"`
 	Issue        string   `json:"issue"`
 	Url          string   `json:"url"`
+	Body         string   `json:"body"`
 	Status       string   `json:"status"`
 	FinishedAt   string   `json:"finishedAt"`
 	Labels       []string `json:"labels"`
@@ -25,6 +26,7 @@ type StoryInput struct {
 	Project      string `json:"project"`
 	Issue        string `json:"issue"`
 	Url          string `json:"url"`
+	Body         string `json:"body"`
 	Status       string `json:"status"`
 	Labels       []string
 	LastWorkedAt string

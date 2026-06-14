@@ -72,6 +72,10 @@ type PageParent struct {
 	DataSourceID string `json:"data_source_id"`
 }
 
+type ReplaceContent struct {
+	NewStr string `json:"new_str"`
+}
+
 type ProjectsDataSourceResponse struct {
 	Object  string `json:"object"`
 	Results []struct {
@@ -103,6 +107,11 @@ type StoriesDataSourceResponse struct {
 	}
 }
 
+type StoryMarkdownResponse struct {
+	Object   string `json:"object"`
+	Markdown string `json:"markdown"`
+}
+
 type NumberFilter struct {
 	Equals int `json:"equals"`
 }
@@ -130,8 +139,14 @@ type StoryProperties struct {
 type StoryCreatePayload struct {
 	Parent     PageParent      `json:"parent"`
 	Properties StoryProperties `json:"properties"`
+	Markdown   string          `json:"markdown"`
 }
 
 type StoryUpdatePayload struct {
 	Properties StoryProperties `json:"properties"`
+}
+
+type StoryMarkdownUpdatePayload struct {
+	Type           string         `json:"type"`
+	ReplaceContent ReplaceContent `json:"replace_content"`
 }

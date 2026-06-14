@@ -17,6 +17,7 @@ type Issue struct {
 	Number      int
 	Title       string
 	URL         string
+	Body        string
 	State       string
 	Labels      []string
 	Repo        string
@@ -81,6 +82,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 			Number:      *issueResponse.Number,
 			Title:       *issueResponse.Title,
 			URL:         *issueResponse.HTMLURL,
+			Body:        issueResponse.GetBody(),
 			State:       *issueResponse.State,
 			Labels:      issueLabels,
 			Repo:        fmt.Sprintf("%s/%s", owner, repo),
@@ -89,7 +91,6 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 			ClosedAt:    closedAt,
 			HasLinkedPR: hasLinkedPR,
 		}
-
 		slog.Debug(fmt.Sprintf("[GITHUB]: Issue found - Number: %d Title: %s Repo: %s", issue.Number, issue.Title, issue.Repo))
 		issues = append(issues, issue)
 	}

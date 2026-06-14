@@ -131,6 +131,31 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue) (*Sto
 	var story Story
 
 	for _, result := range data.Results {
+		url := fmt.Sprintf("%s/pages/%s/markdown", notionBaseUrl, result.ID)
+		req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+
+		req.Header.Add("Notion-Version", notionApiVersion)
+		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
+		req.Header.Add("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode >= 400 {
+			b, _ := io.ReadAll(res.Body)
+			return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
+		}
+		body, _ = io.ReadAll(res.Body)
+
+		var data StoryMarkdownResponse
+		err = json.Unmarshal(body, &data)
+		if err != nil {
+			return nil, err
+		}
+
 		labels := make([]string, len(result.Properties.Labels.MultiSelect))
 
 		for i, label := range result.Properties.Labels.MultiSelect {
@@ -164,6 +189,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue) (*Sto
 		story.Status = result.Properties.Status.Status.Name
 		story.Project = result.Properties.Project.Relation[0].ID
 		story.Url = result.Properties.URL.URL
+		story.Body = data.Markdown
 		story.Name = result.Properties.Name.Title[0].PlainText
 	}
 
