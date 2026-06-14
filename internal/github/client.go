@@ -68,9 +68,13 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 		owner := *issueResponse.Repository.Owner.Login
 		repo := *issueResponse.Repository.Name
 
-		hasLinkedPR, err := c.hasConnectedPR(ctx, owner, repo, *issueResponse.Number)
-		if err != nil {
-			return nil, err
+		hasLinkedPR := false
+
+		if *issueResponse.State == "open" {
+			hasLinkedPR, err = c.hasConnectedPR(ctx, owner, repo, *issueResponse.Number)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		issue := Issue{
