@@ -116,13 +116,23 @@ type NumberFilter struct {
 	Equals int `json:"equals"`
 }
 
+type RelationFilter struct {
+	Contains string `json:"contains"`
+}
+
 type PropertyFilter struct {
-	Property string       `json:"property"`
-	Number   NumberFilter `json:"number"`
+	Property string          `json:"property"`
+	Number   *NumberFilter   `json:"number,omitempty"`
+	Relation *RelationFilter `json:"relation,omitempty"`
+}
+
+type FilterCondition struct {
+	And []PropertyFilter `json:"and,omitempty"`
+	Or  []PropertyFilter `json:"or,omitempty"`
 }
 
 type StoryFilterPayload struct {
-	Filter PropertyFilter `json:"filter"`
+	Filter FilterCondition `json:"filter"`
 }
 
 type StoryProperties struct {

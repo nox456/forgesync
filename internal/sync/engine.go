@@ -13,7 +13,7 @@ import (
 type Notion interface {
 	ListProjects(ctx context.Context) ([]notion.Project, error)
 	UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool, existingStory *notion.Story) (*notion.UpsertResult, error)
-	FindStoryByIssue(ctx context.Context, issue github.Issue) (*notion.Story, error)
+	FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*notion.Story, error)
 }
 
 type Github interface {
@@ -82,7 +82,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 			continue
 		}
 
-		existingStory, err := e.NotionClient.FindStoryByIssue(ctx, issue)
+		existingStory, err := e.NotionClient.FindStoryByIssue(ctx, issue, project.PageID)
 
 		if err != nil {
 			return nil, err

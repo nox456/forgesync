@@ -76,14 +76,24 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 	return projects, nil
 }
 
-func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue) (*Story, error) {
+func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*Story, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.StoriesSourceId)
 
 	filterPayload := &StoryFilterPayload{
-		Filter: PropertyFilter{
-			Property: "Issue",
-			Number:   NumberFilter{Equals: issue.Number},
+		Filter: FilterCondition{
+			And: []PropertyFilter{
+				{
+					Property: "Issue",
+					Number:   &NumberFilter{Equals: issue.Number},
+				},
+				{
+					Property: "Project",
+					Relation: &RelationFilter{
+						Contains: projectId,
+					},
+				},
+			},
 		},
 	}
 
