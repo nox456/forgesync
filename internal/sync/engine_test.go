@@ -37,7 +37,7 @@ func (f *fakeNotion) ListProjects(ctx context.Context) ([]notion.Project, error)
 	return f.projects, f.projectsErr
 }
 
-func (f *fakeNotion) FindStoryByIssue(ctx context.Context, issue github.Issue) (*notion.Story, error) {
+func (f *fakeNotion) FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*notion.Story, error) {
 	if f.findStory == nil {
 		return nil, nil
 	}
