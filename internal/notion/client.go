@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -63,11 +64,13 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 	var projects []Project
 
 	for _, result := range data.Results {
-		projects = append(projects, Project{
+		project := Project{
 			PageID: result.ID,
 			Name:   result.Properties.Name.Title[0].PlainText,
 			Repo:   result.Properties.Repo.RichText[0].PlainText,
-		})
+		}
+		slog.Debug(fmt.Sprintf("[NOTION]: Project found - ID: %s Name: %s Repo: %s", project.PageID, project.Name, project.Repo))
+		projects = append(projects, project)
 	}
 
 	return projects, nil

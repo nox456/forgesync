@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -105,6 +106,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		} else if result.Unchanged {
 			unchanged++
 		}
+		slog.Debug(fmt.Sprintf("[SYNC]: Issue - Number: %d Title %s <-> Story - Status: %s Project: %s", issue.Number, issue.Title, storyInput.Status, project.Name))
 	}
 
 	report := &Report{

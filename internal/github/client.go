@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/go-github/v88/github"
@@ -85,6 +86,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 			HasLinkedPR: hasLinkedPR,
 		}
 
+		slog.Debug(fmt.Sprintf("[GITHUB]: Issue found - Number: %d Title: %s Repo: %s", issue.Number, issue.Title, issue.Repo))
 		issues = append(issues, issue)
 	}
 
