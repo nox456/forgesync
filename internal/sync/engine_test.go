@@ -31,9 +31,12 @@ type fakeNotion struct {
 	// is found (nil, nil).
 	findStory func(issue github.Issue) (*notion.Story, error)
 	calls     []upsertCall
+	// gotRepoName records the repo filter passed to ListProjects.
+	gotRepoName string
 }
 
-func (f *fakeNotion) ListProjects(ctx context.Context) ([]notion.Project, error) {
+func (f *fakeNotion) ListProjects(ctx context.Context, repoName string) ([]notion.Project, error) {
+	f.gotRepoName = repoName
 	return f.projects, f.projectsErr
 }
 
@@ -52,9 +55,12 @@ func (f *fakeNotion) UpsertStory(ctx context.Context, storyInput notion.StoryInp
 type fakeGithub struct {
 	issues []github.Issue
 	err    error
+	// gotRepoName records the repo filter passed to FetchAssignedIssues.
+	gotRepoName string
 }
 
-func (f *fakeGithub) FetchAssignedIssues(ctx context.Context) ([]github.Issue, error) {
+func (f *fakeGithub) FetchAssignedIssues(ctx context.Context, repoName string) ([]github.Issue, error) {
+	f.gotRepoName = repoName
 	return f.issues, f.err
 }
 
@@ -275,5 +281,45 @@ func TestEngineRunMatchesRepoCaseInsensitively(t *testing.T) {
 	want := &Report{Created: 1}
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
 		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestEngineRunForwardsRepoFilter verifies that the RepoFilter option is passed
+// through to both ListProjects and FetchAssignedIssues so the clients can scope
+// their results to a single repo. An empty filter (flag omitted) must forward as
+// an empty string, which the clients treat as "no filter".
+func TestEngineRunForwardsRepoFilter(t *testing.T) {
+	quietLogs(t)
+
+	cases := []struct {
+		name       string
+		repoFilter string
+	}{
+		{name: "forwards a repo filter", repoFilter: "owner/repo-a"},
+		{name: "forwards an empty filter when the flag is omitted", repoFilter: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := &fakeNotion{
+				projects: []notion.Project{{PageID: "p1", Repo: "owner/repo-a"}},
+				upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+					return created(), nil
+				},
+			}
+			g := &fakeGithub{issues: []github.Issue{{Number: 1, Repo: "owner/repo-a"}}}
+			engine := &Engine{NotionClient: n, GithubClient: g}
+
+			if _, err := engine.Run(context.Background(), EngineRunOptions{RepoFilter: tc.repoFilter}); err != nil {
+				t.Fatalf("Run() unexpected error: %v", err)
+			}
+
+			if n.gotRepoName != tc.repoFilter {
+				t.Errorf("ListProjects repoName = %q, want %q", n.gotRepoName, tc.repoFilter)
+			}
+			if g.gotRepoName != tc.repoFilter {
+				t.Errorf("FetchAssignedIssues repoName = %q, want %q", g.gotRepoName, tc.repoFilter)
+			}
+		})
 	}
 }
