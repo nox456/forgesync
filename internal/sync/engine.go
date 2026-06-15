@@ -11,13 +11,13 @@ import (
 )
 
 type Notion interface {
-	ListProjects(ctx context.Context) ([]notion.Project, error)
+	ListProjects(ctx context.Context, repoName string) ([]notion.Project, error)
 	UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool, existingStory *notion.Story) (*notion.UpsertResult, error)
 	FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*notion.Story, error)
 }
 
 type Github interface {
-	FetchAssignedIssues(ctx context.Context) ([]github.Issue, error)
+	FetchAssignedIssues(ctx context.Context, repoName string) ([]github.Issue, error)
 }
 
 type Engine struct {
@@ -26,7 +26,8 @@ type Engine struct {
 }
 
 type EngineRunOptions struct {
-	DryRun bool
+	DryRun     bool
+	RepoFilter string
 }
 
 type ReportError struct {
@@ -51,7 +52,7 @@ func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine
 
 func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, error) {
 	slog.Info("Fetching notion projects...")
-	projects, err := e.NotionClient.ListProjects(ctx)
+	projects, err := e.NotionClient.ListProjects(ctx, options.RepoFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 	}
 
 	slog.Info("Fetching github issues...")
-	issues, err := e.GithubClient.FetchAssignedIssues(ctx)
+	issues, err := e.GithubClient.FetchAssignedIssues(ctx, options.RepoFilter)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v88/github"
@@ -33,7 +34,7 @@ func NewClient(token string) *Client {
 	}
 }
 
-func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
+func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]Issue, error) {
 	client, err := github.NewClient(github.WithAuthToken(c.Token))
 
 	if err != nil {
@@ -50,6 +51,10 @@ func (c *Client) FetchAssignedIssues(ctx context.Context) ([]Issue, error) {
 	for issueResponse, err := range issuesResponse {
 		if err != nil {
 			return nil, err
+		}
+
+		if repoName != "" && !strings.EqualFold(issueResponse.Repository.GetFullName(), repoName) {
+			continue
 		}
 
 		issueLabels := make([]string, len(issueResponse.Labels))

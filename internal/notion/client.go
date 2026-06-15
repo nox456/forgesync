@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/nox456/forgesync/internal/github"
@@ -30,7 +31,7 @@ func NewClient(token string, projectsSourceId string, storiesSourceId string) *C
 	}
 }
 
-func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
+func (c *Client) ListProjects(ctx context.Context, repoName string) ([]Project, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.ProjectsSourceId)
 
@@ -64,6 +65,10 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 	var projects []Project
 
 	for _, result := range data.Results {
+		if repoName != "" && !strings.EqualFold(result.Properties.Repo.RichText[0].PlainText, repoName) {
+			continue
+		}
+
 		project := Project{
 			PageID: result.ID,
 			Name:   result.Properties.Name.Title[0].PlainText,

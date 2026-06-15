@@ -12,7 +12,7 @@ var issuesCmd = &cobra.Command{
 	Use:   "issues",
 	Short: "List issues in GitHub",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		issues, err := GithubClient.FetchAssignedIssues(cmd.Context())
+		issues, err := GithubClient.FetchAssignedIssues(cmd.Context(), "")
 
 		if err != nil {
 			return err
