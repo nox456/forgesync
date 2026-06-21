@@ -8,18 +8,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 
-	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/shared"
+	"github.com/nox456/forgesync/internal/utils"
 )
 
-type UpsertResult struct {
-	Created   bool
-	Updated   bool
-	Unchanged bool
-}
-
-func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue github.Issue, isDryRun bool, existingStory *Story) (*UpsertResult, error) {
+func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, issue shared.Issue, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error) {
 	labels := make([]NamedOption, len(storyInput.Labels))
 	for i, l := range storyInput.Labels {
 		labels[i] = NamedOption{Name: l}
@@ -51,7 +45,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 	if existingStory == nil {
 
 		if isDryRun {
-			return &UpsertResult{
+			return &shared.UpsertResult{
 				Created: true,
 			}, nil
 		}
@@ -95,24 +89,19 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 
 		slog.Debug("notion story created", "issue", createProps.Issue)
 
-		return &UpsertResult{
+		return &shared.UpsertResult{
 			Created: true,
 		}, nil
 	} else {
 
-		hasSameName := existingStory.Name == storyInput.Name
-		hasSameStatus := existingStory.Status == storyInput.Status
-		hasSameLabels := slices.Equal(existingStory.Labels, storyInput.Labels)
-		hasSameLastWorkedAt := existingStory.LastWorkedAt == storyInput.LastWorkedAt
-
-		if hasSameName && hasSameStatus && hasSameLabels && hasSameLastWorkedAt {
-			return &UpsertResult{
+		if utils.IsSynced(issue, existingStory) {
+			return &shared.UpsertResult{
 				Unchanged: true,
 			}, nil
 		}
 
 		if isDryRun {
-			return &UpsertResult{
+			return &shared.UpsertResult{
 				Updated: true,
 			}, nil
 		}
@@ -176,7 +165,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput StoryInput, issue g
 			}
 		}
 
-		return &UpsertResult{
+		return &shared.UpsertResult{
 			Updated: true,
 		}, nil
 	}

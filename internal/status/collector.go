@@ -7,15 +7,16 @@ import (
 
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 type Notion interface {
-	ListProjects(ctx context.Context, repoName string) ([]notion.Project, error)
-	FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*notion.Story, error)
+	ListProjects(ctx context.Context, repoName string) ([]shared.Project, error)
+	FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error)
 }
 
 type Github interface {
-	FetchAssignedIssues(ctx context.Context, repoName string) ([]github.Issue, error)
+	FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error)
 }
 
 type Collector struct {
@@ -37,7 +38,7 @@ func (c *Collector) Collect(ctx context.Context, repoName string) ([]Row, error)
 		return nil, err
 	}
 
-	projectsMap := make(map[string]notion.Project)
+	projectsMap := make(map[string]shared.Project)
 
 	for _, project := range projects {
 		projectsMap[project.Repo] = project

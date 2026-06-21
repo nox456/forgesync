@@ -4,88 +4,88 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 func TestComputeStatus(t *testing.T) {
 	cases := []struct {
 		name           string
-		issue          github.Issue
+		issue          shared.Issue
 		previousStatus string
 		want           string
 	}{
 		{
 			name:  "open without linked PR and no previous status defaults to not started",
-			issue: github.Issue{State: "open", HasLinkedPR: false},
+			issue: shared.Issue{State: "open", HasLinkedPR: false},
 			want:  "Not started",
 		},
 		{
 			name:           "open without linked PR and previous not started stays not started",
-			issue:          github.Issue{State: "open", HasLinkedPR: false},
+			issue:          shared.Issue{State: "open", HasLinkedPR: false},
 			previousStatus: "Not started",
 			want:           "Not started",
 		},
 		{
 			name:  "open with linked PR and no previous status is in progress",
-			issue: github.Issue{State: "open", HasLinkedPR: true},
+			issue: shared.Issue{State: "open", HasLinkedPR: true},
 			want:  "In progress",
 		},
 		{
 			name:           "open with linked PR and previous not started is in progress",
-			issue:          github.Issue{State: "open", HasLinkedPR: true},
+			issue:          shared.Issue{State: "open", HasLinkedPR: true},
 			previousStatus: "Not started",
 			want:           "In progress",
 		},
 		{
 			name:           "open without linked PR preserves a previous manual status",
-			issue:          github.Issue{State: "open", HasLinkedPR: false},
+			issue:          shared.Issue{State: "open", HasLinkedPR: false},
 			previousStatus: "In progress",
 			want:           "In progress",
 		},
 		{
 			name:           "open preserves a previously done status",
-			issue:          github.Issue{State: "open", HasLinkedPR: true},
+			issue:          shared.Issue{State: "open", HasLinkedPR: true},
 			previousStatus: "Done",
 			want:           "Done",
 		},
 		{
 			name:           "open preserves a previously cancelled status",
-			issue:          github.Issue{State: "open", HasLinkedPR: false},
+			issue:          shared.Issue{State: "open", HasLinkedPR: false},
 			previousStatus: "Cancelled",
 			want:           "Cancelled",
 		},
 		{
 			name:           "closed from not started becomes done",
-			issue:          github.Issue{State: "closed", HasLinkedPR: false},
+			issue:          shared.Issue{State: "closed", HasLinkedPR: false},
 			previousStatus: "Not started",
 			want:           "Done",
 		},
 		{
 			name:           "closed from in progress becomes done",
-			issue:          github.Issue{State: "closed", HasLinkedPR: true},
+			issue:          shared.Issue{State: "closed", HasLinkedPR: true},
 			previousStatus: "In progress",
 			want:           "Done",
 		},
 		{
 			name:           "closed preserves a previously done status",
-			issue:          github.Issue{State: "closed", HasLinkedPR: true},
+			issue:          shared.Issue{State: "closed", HasLinkedPR: true},
 			previousStatus: "Done",
 			want:           "Done",
 		},
 		{
 			name:           "closed preserves a previously cancelled status",
-			issue:          github.Issue{State: "closed", HasLinkedPR: false},
+			issue:          shared.Issue{State: "closed", HasLinkedPR: false},
 			previousStatus: "Cancelled",
 			want:           "Cancelled",
 		},
 		{
 			name:  "closed with no previous status becomes done",
-			issue: github.Issue{State: "closed", HasLinkedPR: false},
+			issue: shared.Issue{State: "closed", HasLinkedPR: false},
 			want:  "Done",
 		},
 		{
 			name:  "unknown state falls back to not started",
-			issue: github.Issue{State: "", HasLinkedPR: true},
+			issue: shared.Issue{State: "", HasLinkedPR: true},
 			want:  "Not started",
 		},
 	}

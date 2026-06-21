@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
-func IssueToStoryInput(issue github.Issue, existingStory *notion.Story, projectPageId string) notion.StoryInput {
+func IssueToStoryInput(issue shared.Issue, existingStory *shared.Story, projectPageId string) shared.StoryInput {
 	var finishedDate string
 	if issue.ClosedAt != nil {
 		finishedDate = issue.ClosedAt.Format("2006-01-02 15:04")
@@ -19,7 +19,7 @@ func IssueToStoryInput(issue github.Issue, existingStory *notion.Story, projectP
 		previousStatus = existingStory.Status
 	}
 
-	return notion.StoryInput{
+	return shared.StoryInput{
 		Name:         issue.Title,
 		Project:      projectPageId,
 		Issue:        fmt.Sprintf("%d", issue.Number),

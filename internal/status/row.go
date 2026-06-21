@@ -3,9 +3,9 @@ package status
 import (
 	"log/slog"
 
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/sync"
+	"github.com/nox456/forgesync/internal/utils"
 )
 
 type Row struct {
@@ -18,16 +18,14 @@ type Row struct {
 	IsSynced    bool
 }
 
-func BuildRow(issue github.Issue, project *notion.Project, existingStory *notion.Story) Row {
-	var isSynced bool
+func BuildRow(issue shared.Issue, project *shared.Project, existingStory *shared.Story) Row {
+	isSynced := utils.IsSynced(issue, existingStory)
 	var status string
 
 	if existingStory == nil {
 		slog.Debug("Story not found")
-		isSynced = false
 		status = sync.ComputeStatus(issue, "")
 	} else {
-		isSynced = true
 		status = sync.ComputeStatus(issue, existingStory.Status)
 	}
 

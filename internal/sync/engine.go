@@ -6,18 +6,17 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 type Notion interface {
-	ListProjects(ctx context.Context, repoName string) ([]notion.Project, error)
-	UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool, existingStory *notion.Story) (*notion.UpsertResult, error)
-	FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*notion.Story, error)
+	ListProjects(ctx context.Context, repoName string) ([]shared.Project, error)
+	UpsertStory(ctx context.Context, storyInput shared.StoryInput, issue shared.Issue, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error)
+	FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error)
 }
 
 type Github interface {
-	FetchAssignedIssues(ctx context.Context, repoName string) ([]github.Issue, error)
+	FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error)
 }
 
 type Engine struct {
@@ -43,7 +42,7 @@ type Report struct {
 	Errors    []ReportError
 }
 
-func NewEngine(notionClient *notion.Client, githubClient *github.Client) *Engine {
+func NewEngine(notionClient Notion, githubClient Github) *Engine {
 	return &Engine{
 		NotionClient: notionClient,
 		GithubClient: githubClient,
@@ -57,7 +56,7 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		return nil, err
 	}
 
-	projectsMap := make(map[string]notion.Project)
+	projectsMap := make(map[string]shared.Project)
 
 	for _, project := range projects {
 		projectsMap[strings.ToLower(project.Repo)] = project

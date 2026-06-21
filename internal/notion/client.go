@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 const notionBaseUrl = "https://api.notion.com/v1"
@@ -31,7 +31,7 @@ func NewClient(token string, projectsSourceId string, storiesSourceId string) *C
 	}
 }
 
-func (c *Client) ListProjects(ctx context.Context, repoName string) ([]Project, error) {
+func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Project, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.ProjectsSourceId)
 
@@ -62,14 +62,14 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]Project, 
 		return nil, err
 	}
 
-	var projects []Project
+	var projects []shared.Project
 
 	for _, result := range data.Results {
 		if repoName != "" && !strings.EqualFold(result.Properties.Repo.RichText[0].PlainText, repoName) {
 			continue
 		}
 
-		project := Project{
+		project := shared.Project{
 			PageID: result.ID,
 			Name:   result.Properties.Name.Title[0].PlainText,
 			Repo:   result.Properties.Repo.RichText[0].PlainText,
@@ -81,7 +81,7 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]Project, 
 	return projects, nil
 }
 
-func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*Story, error) {
+func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.StoriesSourceId)
 
@@ -143,7 +143,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue github.Issue, proje
 		return nil, fmt.Errorf("found more than one story for issue %d", issue.Number)
 	}
 
-	var story Story
+	var story shared.Story
 
 	for _, result := range data.Results {
 		url := fmt.Sprintf("%s/pages/%s/markdown", notionBaseUrl, result.ID)

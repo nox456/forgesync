@@ -8,24 +8,11 @@ import (
 	"time"
 
 	"github.com/google/go-github/v88/github"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 type Client struct {
 	Token string
-}
-
-type Issue struct {
-	Number      int
-	Title       string
-	URL         string
-	Body        string
-	State       string
-	Labels      []string
-	Repo        string
-	UpdatedAt   time.Time
-	CreatedAt   time.Time
-	ClosedAt    *time.Time
-	HasLinkedPR bool
 }
 
 func NewClient(token string) *Client {
@@ -34,14 +21,14 @@ func NewClient(token string) *Client {
 	}
 }
 
-func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]Issue, error) {
+func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error) {
 	client, err := github.NewClient(github.WithAuthToken(c.Token))
 
 	if err != nil {
 		return nil, err
 	}
 
-	var issues []Issue
+	var issues []shared.Issue
 
 	issuesResponse := client.Issues.ListAllIssuesIter(ctx, &github.ListAllIssuesOptions{
 		State: "all",
@@ -83,7 +70,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]Is
 			}
 		}
 
-		issue := Issue{
+		issue := shared.Issue{
 			Number:      *issueResponse.Number,
 			Title:       *issueResponse.Title,
 			URL:         *issueResponse.HTMLURL,

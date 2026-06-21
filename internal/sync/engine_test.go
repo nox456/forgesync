@@ -10,63 +10,62 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 // upsertCall records the arguments a fakeNotion received on UpsertStory.
 type upsertCall struct {
-	storyInput notion.StoryInput
-	issue      github.Issue
+	storyInput shared.StoryInput
+	issue      shared.Issue
 	isDryRun   bool
 }
 
 type fakeNotion struct {
-	projects    []notion.Project
+	projects    []shared.Project
 	projectsErr error
 	// upsert returns the result for a given issue. It is only invoked for
 	// issues whose repo matches a project.
-	upsert func(issue github.Issue) (*notion.UpsertResult, error)
+	upsert func(issue shared.Issue) (*shared.UpsertResult, error)
 	// findStory returns the existing story for an issue. When nil, no story
 	// is found (nil, nil).
-	findStory func(issue github.Issue) (*notion.Story, error)
+	findStory func(issue shared.Issue) (*shared.Story, error)
 	calls     []upsertCall
 	// gotRepoName records the repo filter passed to ListProjects.
 	gotRepoName string
 }
 
-func (f *fakeNotion) ListProjects(ctx context.Context, repoName string) ([]notion.Project, error) {
+func (f *fakeNotion) ListProjects(ctx context.Context, repoName string) ([]shared.Project, error) {
 	f.gotRepoName = repoName
 	return f.projects, f.projectsErr
 }
 
-func (f *fakeNotion) FindStoryByIssue(ctx context.Context, issue github.Issue, projectId string) (*notion.Story, error) {
+func (f *fakeNotion) FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error) {
 	if f.findStory == nil {
 		return nil, nil
 	}
 	return f.findStory(issue)
 }
 
-func (f *fakeNotion) UpsertStory(ctx context.Context, storyInput notion.StoryInput, issue github.Issue, isDryRun bool, existingStory *notion.Story) (*notion.UpsertResult, error) {
+func (f *fakeNotion) UpsertStory(ctx context.Context, storyInput shared.StoryInput, issue shared.Issue, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error) {
 	f.calls = append(f.calls, upsertCall{storyInput: storyInput, issue: issue, isDryRun: isDryRun})
 	return f.upsert(issue)
 }
 
 type fakeGithub struct {
-	issues []github.Issue
+	issues []shared.Issue
 	err    error
 	// gotRepoName records the repo filter passed to FetchAssignedIssues.
 	gotRepoName string
 }
 
-func (f *fakeGithub) FetchAssignedIssues(ctx context.Context, repoName string) ([]github.Issue, error) {
+func (f *fakeGithub) FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error) {
 	f.gotRepoName = repoName
 	return f.issues, f.err
 }
 
-func created() *notion.UpsertResult   { return &notion.UpsertResult{Created: true} }
-func updated() *notion.UpsertResult   { return &notion.UpsertResult{Updated: true} }
-func unchanged() *notion.UpsertResult { return &notion.UpsertResult{Unchanged: true} }
+func created() *shared.UpsertResult   { return &shared.UpsertResult{Created: true} }
+func updated() *shared.UpsertResult   { return &shared.UpsertResult{Updated: true} }
+func unchanged() *shared.UpsertResult { return &shared.UpsertResult{Unchanged: true} }
 
 // quietLogs silences slog output for the duration of a test so the Run logs
 // don't clutter the test output, restoring the previous default afterwards.
@@ -82,23 +81,23 @@ func TestEngineRun(t *testing.T) {
 
 	cases := []struct {
 		name     string
-		projects []notion.Project
-		issues   []github.Issue
-		upsert   func(issue github.Issue) (*notion.UpsertResult, error)
+		projects []shared.Project
+		issues   []shared.Issue
+		upsert   func(issue shared.Issue) (*shared.UpsertResult, error)
 		want     *Report
 	}{
 		{
 			name: "counts created, updated and unchanged results",
-			projects: []notion.Project{
+			projects: []shared.Project{
 				{PageID: "p1", Repo: "owner/repo-a"},
 				{PageID: "p2", Repo: "owner/repo-b"},
 			},
-			issues: []github.Issue{
+			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/repo-a"},
 				{Number: 2, Repo: "owner/repo-a"},
 				{Number: 3, Repo: "owner/repo-b"},
 			},
-			upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				switch issue.Number {
 				case 1:
 					return created(), nil
@@ -112,26 +111,26 @@ func TestEngineRun(t *testing.T) {
 		},
 		{
 			name:     "skips issues without a matching project",
-			projects: []notion.Project{{PageID: "p1", Repo: "owner/known"}},
-			issues: []github.Issue{
+			projects: []shared.Project{{PageID: "p1", Repo: "owner/known"}},
+			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/known"},
 				{Number: 2, Repo: "owner/unknown"},
 				{Number: 3, Repo: "owner/also-unknown"},
 			},
-			upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				return created(), nil
 			},
 			want: &Report{Created: 1, Skipped: 2},
 		},
 		{
 			name:     "records upsert errors and keeps processing",
-			projects: []notion.Project{{PageID: "p1", Repo: "owner/repo"}},
-			issues: []github.Issue{
+			projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
+			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/repo"},
 				{Number: 2, Repo: "owner/repo"},
 				{Number: 3, Repo: "owner/repo"},
 			},
-			upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				if issue.Number == 2 {
 					return nil, errors.New("boom")
 				}
@@ -144,9 +143,9 @@ func TestEngineRun(t *testing.T) {
 		},
 		{
 			name:     "no issues produces an empty report",
-			projects: []notion.Project{{PageID: "p1", Repo: "owner/repo"}},
+			projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
 			issues:   nil,
-			upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				t.Fatalf("UpsertStory should not be called when there are no issues")
 				return nil, nil
 			},
@@ -201,7 +200,7 @@ func TestEngineRunFetchIssuesError(t *testing.T) {
 
 	wantErr := errors.New("fetch issues failed")
 	engine := &Engine{
-		NotionClient: &fakeNotion{projects: []notion.Project{{PageID: "p1", Repo: "owner/repo"}}},
+		NotionClient: &fakeNotion{projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}}},
 		GithubClient: &fakeGithub{err: wantErr},
 	}
 
@@ -218,7 +217,7 @@ func TestEngineRunBuildsStoryInputAndPassesDryRun(t *testing.T) {
 	quietLogs(t)
 
 	updatedAt := time.Date(2026, 5, 20, 10, 30, 0, 0, time.UTC)
-	issue := github.Issue{
+	issue := shared.Issue{
 		Number:    42,
 		Title:     "Add login flow",
 		URL:       "https://github.com/owner/repo/issues/42",
@@ -230,12 +229,12 @@ func TestEngineRunBuildsStoryInputAndPassesDryRun(t *testing.T) {
 
 	for _, dryRun := range []bool{true, false} {
 		n := &fakeNotion{
-			projects: []notion.Project{{PageID: "page-1", Repo: "owner/repo"}},
-			upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+			projects: []shared.Project{{PageID: "page-1", Repo: "owner/repo"}},
+			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				return created(), nil
 			},
 		}
-		engine := &Engine{NotionClient: n, GithubClient: &fakeGithub{issues: []github.Issue{issue}}}
+		engine := &Engine{NotionClient: n, GithubClient: &fakeGithub{issues: []shared.Issue{issue}}}
 
 		if _, err := engine.Run(context.Background(), EngineRunOptions{DryRun: dryRun}); err != nil {
 			t.Fatalf("Run() unexpected error: %v", err)
@@ -263,14 +262,14 @@ func TestEngineRunMatchesRepoCaseInsensitively(t *testing.T) {
 	quietLogs(t)
 
 	n := &fakeNotion{
-		projects: []notion.Project{{PageID: "p1", Repo: "Owner/Repo-A"}},
-		upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+		projects: []shared.Project{{PageID: "p1", Repo: "Owner/Repo-A"}},
+		upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 			return created(), nil
 		},
 	}
 	engine := &Engine{
 		NotionClient: n,
-		GithubClient: &fakeGithub{issues: []github.Issue{{Number: 1, Repo: "owner/repo-a"}}},
+		GithubClient: &fakeGithub{issues: []shared.Issue{{Number: 1, Repo: "owner/repo-a"}}},
 	}
 
 	got, err := engine.Run(context.Background(), EngineRunOptions{})
@@ -302,12 +301,12 @@ func TestEngineRunForwardsRepoFilter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &fakeNotion{
-				projects: []notion.Project{{PageID: "p1", Repo: "owner/repo-a"}},
-				upsert: func(issue github.Issue) (*notion.UpsertResult, error) {
+				projects: []shared.Project{{PageID: "p1", Repo: "owner/repo-a"}},
+				upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 					return created(), nil
 				},
 			}
-			g := &fakeGithub{issues: []github.Issue{{Number: 1, Repo: "owner/repo-a"}}}
+			g := &fakeGithub{issues: []shared.Issue{{Number: 1, Repo: "owner/repo-a"}}}
 			engine := &Engine{NotionClient: n, GithubClient: g}
 
 			if _, err := engine.Run(context.Background(), EngineRunOptions{RepoFilter: tc.repoFilter}); err != nil {

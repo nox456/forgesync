@@ -5,8 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/status"
 	"github.com/nox456/forgesync/internal/sync"
 )
@@ -21,7 +20,7 @@ func NewTextPrinter() *TextPrinter {
 	}
 }
 
-func (p *TextPrinter) PrintProjects(projects []notion.Project) {
+func (p *TextPrinter) PrintProjects(projects []shared.Project) {
 	fmt.Println("==== Projects ====")
 	fmt.Fprintln(p.printer, "Name\tRepo")
 	for _, project := range projects {
@@ -35,7 +34,7 @@ func (p *TextPrinter) PrintProjects(projects []notion.Project) {
 	}
 }
 
-func (p *TextPrinter) PrintIssues(issues []github.Issue) {
+func (p *TextPrinter) PrintIssues(issues []shared.Issue) {
 	fmt.Println("==== Issues ====")
 
 	fmt.Fprintln(p.printer, "#\tRepo\tTitle\tState\tHas PR")

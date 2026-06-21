@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/status"
 	"github.com/nox456/forgesync/internal/sync"
 )
@@ -47,7 +46,7 @@ func NewJSONPrinter() *JSONPrinter {
 	return &JSONPrinter{}
 }
 
-func (p *JSONPrinter) PrintProjects(projects []notion.Project) {
+func (p *JSONPrinter) PrintProjects(projects []shared.Project) {
 	parsedProjects := make([]Project, len(projects))
 
 	for i, project := range projects {
@@ -68,7 +67,7 @@ func (p *JSONPrinter) PrintProjects(projects []notion.Project) {
 	fmt.Println(string(bytes))
 }
 
-func (p *JSONPrinter) PrintIssues(issues []github.Issue) {
+func (p *JSONPrinter) PrintIssues(issues []shared.Issue) {
 	parsedIssues := make([]Issue, len(issues))
 
 	for i, issue := range issues {

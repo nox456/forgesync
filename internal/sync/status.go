@@ -1,10 +1,10 @@
 package sync
 
 import (
-	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
-func ComputeStatus(issue github.Issue, previousStatus string) string {
+func ComputeStatus(issue shared.Issue, previousStatus string) string {
 	switch issue.State {
 	case "open":
 		if previousStatus == "" || previousStatus == "Not started" {

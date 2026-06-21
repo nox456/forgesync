@@ -5,8 +5,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 func TestIssueToStoryInput(t *testing.T) {
@@ -15,14 +14,14 @@ func TestIssueToStoryInput(t *testing.T) {
 
 	cases := []struct {
 		name          string
-		issue         github.Issue
-		existingStory *notion.Story
+		issue         shared.Issue
+		existingStory *shared.Story
 		projectPageId string
-		want          notion.StoryInput
+		want          shared.StoryInput
 	}{
 		{
 			name: "basic open issue with no existing story defaults to not started",
-			issue: github.Issue{
+			issue: shared.Issue{
 				Number:    42,
 				Title:     "Add login flow",
 				URL:       "https://github.com/owner/repo/issues/42",
@@ -31,7 +30,7 @@ func TestIssueToStoryInput(t *testing.T) {
 				UpdatedAt: updatedAt,
 			},
 			projectPageId: "project-page-1",
-			want: notion.StoryInput{
+			want: shared.StoryInput{
 				Name:         "Add login flow",
 				Project:      "project-page-1",
 				Issue:        "42",
@@ -44,7 +43,7 @@ func TestIssueToStoryInput(t *testing.T) {
 		},
 		{
 			name: "open issue preserves the manual status of an existing story",
-			issue: github.Issue{
+			issue: shared.Issue{
 				Number:    42,
 				Title:     "Add login flow",
 				URL:       "https://github.com/owner/repo/issues/42",
@@ -52,9 +51,9 @@ func TestIssueToStoryInput(t *testing.T) {
 				Labels:    []string{"feature", "frontend"},
 				UpdatedAt: updatedAt,
 			},
-			existingStory: &notion.Story{Status: "In progress"},
+			existingStory: &shared.Story{Status: "In progress"},
 			projectPageId: "project-page-1",
-			want: notion.StoryInput{
+			want: shared.StoryInput{
 				Name:         "Add login flow",
 				Project:      "project-page-1",
 				Issue:        "42",
@@ -67,7 +66,7 @@ func TestIssueToStoryInput(t *testing.T) {
 		},
 		{
 			name: "closed issue in progress sets finished date and done status",
-			issue: github.Issue{
+			issue: shared.Issue{
 				Number:      7,
 				Title:       "Fix race condition",
 				URL:         "https://github.com/owner/repo/issues/7",
@@ -77,9 +76,9 @@ func TestIssueToStoryInput(t *testing.T) {
 				ClosedAt:    &closedAt,
 				HasLinkedPR: true,
 			},
-			existingStory: &notion.Story{Status: "In progress"},
+			existingStory: &shared.Story{Status: "In progress"},
 			projectPageId: "project-page-2",
-			want: notion.StoryInput{
+			want: shared.StoryInput{
 				Name:         "Fix race condition",
 				Project:      "project-page-2",
 				Issue:        "7",
@@ -92,7 +91,7 @@ func TestIssueToStoryInput(t *testing.T) {
 		},
 		{
 			name: "empty labels are preserved as-is",
-			issue: github.Issue{
+			issue: shared.Issue{
 				Number:    1,
 				Title:     "No labels yet",
 				URL:       "https://github.com/owner/repo/issues/1",
@@ -101,7 +100,7 @@ func TestIssueToStoryInput(t *testing.T) {
 				UpdatedAt: updatedAt,
 			},
 			projectPageId: "project-page-3",
-			want: notion.StoryInput{
+			want: shared.StoryInput{
 				Name:         "No labels yet",
 				Project:      "project-page-3",
 				Issue:        "1",
