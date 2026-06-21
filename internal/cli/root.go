@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -33,16 +34,19 @@ var rootCmd = &cobra.Command{
 		GithubClient = github.NewClient(Config.GitHubToken)
 		NotionClient = notion.NewClient(Config.NotionToken, Config.ProjectsSourceId, Config.StoriesSourceId)
 
-		if JSONOutput {
-			Printer = output.NewJSONPrinter()
-		} else {
-			Printer = output.NewTextPrinter()
-		}
-
 		if Verbose {
 			slog.SetLogLoggerLevel(slog.LevelDebug)
 		} else {
 			slog.SetLogLoggerLevel(slog.LevelInfo)
+		}
+
+		if JSONOutput {
+			Printer = output.NewJSONPrinter()
+
+			disabledLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			slog.SetDefault(disabledLogger)
+		} else {
+			Printer = output.NewTextPrinter()
 		}
 
 		return nil

@@ -103,5 +103,5 @@ func (p *JSONPrinter) PrintReport(report *sync.Report) {
 		return
 	}
 
-	fmt.Println(string(bytes))
+	fmt.Print(string(bytes))
 }
