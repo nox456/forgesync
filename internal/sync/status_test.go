@@ -26,15 +26,15 @@ func TestComputeStatus(t *testing.T) {
 			want:           "Not started",
 		},
 		{
-			name:  "open with linked PR and no previous status is in progress",
+			name:  "open with linked PR and no previous status is in PR",
 			issue: shared.Issue{State: "open", HasLinkedPR: true},
-			want:  "In progress",
+			want:  "In PR",
 		},
 		{
-			name:           "open with linked PR and previous not started is in progress",
+			name:           "open with linked PR and previous not started is in PR",
 			issue:          shared.Issue{State: "open", HasLinkedPR: true},
 			previousStatus: "Not started",
-			want:           "In progress",
+			want:           "In PR",
 		},
 		{
 			name:           "open without linked PR preserves a previous manual status",
