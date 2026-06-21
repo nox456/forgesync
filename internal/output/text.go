@@ -7,6 +7,7 @@ import (
 
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/status"
 	"github.com/nox456/forgesync/internal/sync"
 )
 
@@ -83,5 +84,44 @@ func (p *TextPrinter) PrintReport(report *sync.Report) {
 		for _, error := range report.Errors {
 			fmt.Printf("* forgesync#%d: %s\n", error.IssueNumber, error.Error)
 		}
+	}
+}
+
+func (p *TextPrinter) PrintStatus(rows []status.Row) {
+	fmt.Println("==== Status ====")
+	fmt.Fprintln(p.printer, "Project\tIssue\tTitle\tStatus\tHas PR\tIs Synced")
+	for _, row := range rows {
+		var hasPR string
+		if row.HasPR {
+			hasPR = ""
+		} else {
+			hasPR = ""
+		}
+
+		var isSynced string
+		if row.IsSynced {
+			isSynced = ""
+		} else {
+			isSynced = ""
+		}
+
+		var issueNumber string
+		var projectName string
+
+		if row.ProjectName != nil {
+			projectName = *row.ProjectName
+			issueNumber = fmt.Sprintf("%d", row.IssueNumber)
+		} else {
+			projectName = "[NO PROJECT]"
+			issueNumber = fmt.Sprintf("%d (%s)", row.IssueNumber, row.IssueRepo)
+		}
+
+		fmt.Fprintf(p.printer, "%s\t%s\t%s\t%s\t%s\t%s\n", projectName, issueNumber, row.IssueTitle, row.Status, hasPR, isSynced)
+	}
+
+	err := p.printer.Flush()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
 	}
 }

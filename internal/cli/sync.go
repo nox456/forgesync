@@ -6,11 +6,10 @@ import (
 )
 
 var DryRun bool
-var repoName string
 
 func init() {
 	syncCmd.Flags().BoolVarP(&DryRun, "dry-run", "d", false, "Dry run - Don't perform any changes, just print the results")
-	syncCmd.Flags().StringVarP(&repoName, "repo", "", "", "Only sync issues from this repo (format: owner/repo)")
+	syncCmd.Flags().StringVarP(&RepoName, "repo", "", "", "Only sync issues from this repo (format: owner/repo)")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -21,8 +20,8 @@ var syncCmd = &cobra.Command{
 		engine := sync.NewEngine(NotionClient, GithubClient)
 
 		report, err := engine.Run(cmd.Context(), sync.EngineRunOptions{
-			DryRun: DryRun,
-			RepoFilter: repoName,
+			DryRun:     DryRun,
+			RepoFilter: RepoName,
 		})
 
 		if err != nil {

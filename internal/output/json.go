@@ -7,6 +7,7 @@ import (
 
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
+	"github.com/nox456/forgesync/internal/status"
 	"github.com/nox456/forgesync/internal/sync"
 )
 
@@ -30,6 +31,16 @@ type Report struct {
 	Skipped   int      `json:"skipped"`
 	Unchanged int      `json:"unchanged"`
 	Errors    []string `json:"errors"`
+}
+
+type StatusRow struct {
+	IssueNumber int     `json:"issue_number"`
+	IssueTitle  string  `json:"issue_title"`
+	ProjectName *string `json:"project_name"`
+	IssueRepo   string  `json:"issue_repo"`
+	Status      string  `json:"status"`
+	HasPR       bool    `json:"has_pr"`
+	IsSynced    bool    `json:"is_synced"`
 }
 
 func NewJSONPrinter() *JSONPrinter {
@@ -98,6 +109,32 @@ func (p *JSONPrinter) PrintReport(report *sync.Report) {
 	bytes, err := json.Marshal(struct {
 		Report Report `json:"report"`
 	}{Report: parsedReport})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
+	fmt.Print(string(bytes))
+}
+
+func (p *JSONPrinter) PrintStatus(rows []status.Row) {
+	parsedRows := make([]StatusRow, len(rows))
+
+	for i, row := range rows {
+		parsedRows[i] = StatusRow{
+			IssueNumber: row.IssueNumber,
+			IssueTitle:  row.IssueTitle,
+			Status:      row.Status,
+			IssueRepo:   row.IssueRepo,
+			ProjectName: row.ProjectName,
+			HasPR:       row.HasPR,
+			IsSynced:    row.IsSynced,
+		}
+	}
+
+	bytes, err := json.Marshal(struct {
+		Rows []StatusRow `json:"rows"`
+	}{Rows: parsedRows})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return

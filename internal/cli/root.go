@@ -19,6 +19,7 @@ var Config *config.Config
 var GithubClient *github.Client
 var NotionClient *notion.Client
 var Verbose bool
+var RepoName string
 
 var rootCmd = &cobra.Command{
 	Use:   "forgesync",
