@@ -9,7 +9,7 @@ func ComputeStatus(issue github.Issue, previousStatus string) string {
 	case "open":
 		if previousStatus == "" || previousStatus == "Not started" {
 			if issue.HasLinkedPR {
-				return "In progress"
+				return "In PR"
 			}
 			return "Not started"
 		}
