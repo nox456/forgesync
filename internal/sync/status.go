@@ -13,6 +13,9 @@ func ComputeStatus(issue shared.Issue, previousStatus string) string {
 			}
 			return "Not started"
 		}
+		if previousStatus == "In progress" && issue.HasLinkedPR {
+			return "In PR"
+		}
 		return previousStatus
 	case "closed":
 		if previousStatus == "Cancelled" {
