@@ -14,7 +14,6 @@ type Story struct {
 	Project      string
 	Issue        string
 	Url          string
-	Body         string
 	Status       string
 	FinishedAt   string
 	Labels       []string

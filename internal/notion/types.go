@@ -107,11 +107,6 @@ type StoriesDataSourceResponse struct {
 	}
 }
 
-type StoryMarkdownResponse struct {
-	Object   string `json:"object"`
-	Markdown string `json:"markdown"`
-}
-
 type NumberFilter struct {
 	Equals int `json:"equals"`
 }
