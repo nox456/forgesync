@@ -16,6 +16,7 @@ import (
 
 const notionBaseUrl = "https://api.notion.com/v1"
 const notionApiVersion = "2026-03-11"
+const notionMaxPageSize = 100
 
 type Client struct {
 	Token            string
@@ -40,11 +41,21 @@ func NewClient(token string, projectsSourceId string, storiesSourceId string) *C
 	}
 }
 
-func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Project, error) {
+func (c *Client) queryProjectsPage(ctx context.Context, cursor string) (*ProjectsDataSourceResponse, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.ProjectsSourceId)
 
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, nil)
+	payload := &DataSourceQueryPayload{
+		StartCursor: cursor,
+		PageSize:    notionMaxPageSize,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
 
 	req.Header.Add("Notion-Version", notionApiVersion)
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
@@ -62,7 +73,7 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Pr
 		return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
 	}
 
-	body, _ := io.ReadAll(res.Body)
+	body, _ = io.ReadAll(res.Body)
 
 	var data ProjectsDataSourceResponse
 
@@ -71,20 +82,39 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Pr
 		return nil, err
 	}
 
+	return &data, nil
+}
+
+func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Project, error) {
+
 	var projects []shared.Project
+	cursor := ""
 
-	for _, result := range data.Results {
-		if repoName != "" && !strings.EqualFold(result.Properties.Repo.RichText[0].PlainText, repoName) {
-			continue
+	for {
+		data, err := c.queryProjectsPage(ctx, cursor)
+		if err != nil {
+			return nil, err
 		}
 
-		project := shared.Project{
-			PageID: result.ID,
-			Name:   result.Properties.Name.Title[0].PlainText,
-			Repo:   result.Properties.Repo.RichText[0].PlainText,
+		for _, result := range data.Results {
+			if repoName != "" && !strings.EqualFold(result.Properties.Repo.RichText[0].PlainText, repoName) {
+				continue
+			}
+
+			project := shared.Project{
+				PageID: result.ID,
+				Name:   result.Properties.Name.Title[0].PlainText,
+				Repo:   result.Properties.Repo.RichText[0].PlainText,
+			}
+			slog.Debug(fmt.Sprintf("[NOTION]: Project found - ID: %s Name: %s Repo: %s", project.PageID, project.Name, project.Repo))
+			projects = append(projects, project)
 		}
-		slog.Debug(fmt.Sprintf("[NOTION]: Project found - ID: %s Name: %s Repo: %s", project.PageID, project.Name, project.Repo))
-		projects = append(projects, project)
+
+		if !data.HasMore || data.NextCursor == "" {
+			break
+		}
+
+		cursor = data.NextCursor
 	}
 
 	return projects, nil
