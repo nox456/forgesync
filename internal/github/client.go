@@ -13,24 +13,26 @@ import (
 
 type Client struct {
 	Token string
+	gh    *github.Client
 }
 
-func NewClient(token string) *Client {
-	return &Client{
-		Token: token,
-	}
-}
-
-func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error) {
-	client, err := github.NewClient(github.WithAuthToken(c.Token))
+func NewClient(token string) (*Client, error) {
+	client, err := github.NewClient(github.WithAuthToken(token))
 
 	if err != nil {
 		return nil, err
 	}
 
+	return &Client{
+		Token: token,
+		gh:    client,
+	}, nil
+}
+
+func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error) {
 	var issues []shared.Issue
 
-	issuesResponse := client.Issues.ListAllIssuesIter(ctx, &github.ListAllIssuesOptions{
+	issuesResponse := c.gh.Issues.ListAllIssuesIter(ctx, &github.ListAllIssuesOptions{
 		State: "all",
 		Since: time.Now().AddDate(0, 0, -15),
 	})
@@ -91,16 +93,11 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]sh
 }
 
 func (c *Client) hasConnectedPR(ctx context.Context, owner, repo string, number int) (bool, error) {
-	client, err := github.NewClient(github.WithAuthToken(c.Token))
-	if err != nil {
-		return false, err
-	}
-
 	opts := &github.ListOptions{PerPage: 100}
 	connections := 0
 
 	for {
-		events, resp, err := client.Issues.ListIssueTimeline(ctx, owner, repo, number, opts)
+		events, resp, err := c.gh.Issues.ListIssueTimeline(ctx, owner, repo, number, opts)
 		if err != nil {
 			return false, err
 		}

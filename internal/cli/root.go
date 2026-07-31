@@ -32,7 +32,10 @@ var rootCmd = &cobra.Command{
 
 		Config = config
 
-		GithubClient = github.NewClient(Config.GitHubToken)
+		GithubClient, err = github.NewClient(Config.GitHubToken)
+		if err != nil {
+			return err
+		}
 		NotionClient = notion.NewClient(Config.NotionToken, Config.ProjectsSourceId, Config.StoriesSourceId)
 
 		if Verbose {

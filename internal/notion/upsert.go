@@ -76,7 +76,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, 
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 		req.Header.Add("Content-Type", "application/json")
 
-		res, err := http.DefaultClient.Do(req)
+		res, err := c.HTTP.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +123,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, 
 		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 		req.Header.Add("Content-Type", "application/json")
 
-		res, err := http.DefaultClient.Do(req)
+		res, err := c.HTTP.Do(req)
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +153,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, 
 			req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 			req.Header.Add("Content-Type", "application/json")
 
-			res, err = http.DefaultClient.Do(req)
+			res, err = c.HTTP.Do(req)
 			if err != nil {
 				return nil, err
 			}

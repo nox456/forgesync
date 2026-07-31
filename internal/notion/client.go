@@ -21,13 +21,22 @@ type Client struct {
 	Token            string
 	ProjectsSourceId string
 	StoriesSourceId  string
+	HTTP             *http.Client
 }
 
 func NewClient(token string, projectsSourceId string, storiesSourceId string) *Client {
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 10,
+			MaxIdleConns:        10,
+		},
+		Timeout: time.Second * 30,
+	}
 	return &Client{
 		Token:            token,
 		ProjectsSourceId: projectsSourceId,
 		StoriesSourceId:  storiesSourceId,
+		HTTP:             httpClient,
 	}
 }
 
@@ -41,7 +50,7 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Pr
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.HTTP.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -114,7 +123,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.Token))
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := c.HTTP.Do(req)
 
 	if err != nil {
 		return nil, err
