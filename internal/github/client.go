@@ -34,7 +34,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]sh
 
 	issuesResponse := c.gh.Issues.ListAllIssuesIter(ctx, &github.ListAllIssuesOptions{
 		State: "all",
-		Since: time.Now().AddDate(0, 0, -15),
+		Since: time.Now().AddDate(0, 0, -7),
 	})
 
 	for issueResponse, err := range issuesResponse {
