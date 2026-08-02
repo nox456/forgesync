@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
@@ -15,14 +16,19 @@ import (
 
 // upsertCall records the arguments a fakeNotion received on UpsertStory.
 type upsertCall struct {
-	storyInput shared.StoryInput
-	issue      shared.Issue
-	isDryRun   bool
+	storyInput    shared.StoryInput
+	issue         shared.Issue
+	isDryRun      bool
+	existingStory *shared.Story
 }
 
 type fakeNotion struct {
 	projects    []shared.Project
 	projectsErr error
+	// stories holds the stories each project page returns, keyed by project
+	// page id.
+	stories    map[string][]shared.Story
+	storiesErr error
 	// upsert returns the result for a given issue. It is only invoked for
 	// issues whose repo matches a project.
 	upsert func(issue shared.Issue) (*shared.UpsertResult, error)
@@ -46,8 +52,15 @@ func (f *fakeNotion) FindStoryByIssue(ctx context.Context, issue shared.Issue, p
 	return f.findStory(issue)
 }
 
+func (f *fakeNotion) ListStoriesByProject(ctx context.Context, projectId string) ([]shared.Story, error) {
+	if f.storiesErr != nil {
+		return nil, f.storiesErr
+	}
+	return f.stories[projectId], nil
+}
+
 func (f *fakeNotion) UpsertStory(ctx context.Context, storyInput shared.StoryInput, issue shared.Issue, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error) {
-	f.calls = append(f.calls, upsertCall{storyInput: storyInput, issue: issue, isDryRun: isDryRun})
+	f.calls = append(f.calls, upsertCall{storyInput: storyInput, issue: issue, isDryRun: isDryRun, existingStory: existingStory})
 	return f.upsert(issue)
 }
 
@@ -61,6 +74,14 @@ type fakeGithub struct {
 func (f *fakeGithub) FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error) {
 	f.gotRepoName = repoName
 	return f.issues, f.err
+}
+
+// storyFor builds the Notion story a project returns for a given issue number.
+func storyFor(issueNumber int) shared.Story {
+	return shared.Story{
+		PageID: fmt.Sprintf("story-%d", issueNumber),
+		Issue:  fmt.Sprintf("%d", issueNumber),
+	}
 }
 
 func created() *shared.UpsertResult   { return &shared.UpsertResult{Created: true} }
@@ -82,6 +103,7 @@ func TestEngineRun(t *testing.T) {
 	cases := []struct {
 		name     string
 		projects []shared.Project
+		stories  map[string][]shared.Story
 		issues   []shared.Issue
 		upsert   func(issue shared.Issue) (*shared.UpsertResult, error)
 		want     *Report
@@ -91,6 +113,10 @@ func TestEngineRun(t *testing.T) {
 			projects: []shared.Project{
 				{PageID: "p1", Repo: "owner/repo-a"},
 				{PageID: "p2", Repo: "owner/repo-b"},
+			},
+			stories: map[string][]shared.Story{
+				"p1": {storyFor(1), storyFor(2)},
+				"p2": {storyFor(3)},
 			},
 			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/repo-a"},
@@ -112,6 +138,7 @@ func TestEngineRun(t *testing.T) {
 		{
 			name:     "skips issues without a matching project",
 			projects: []shared.Project{{PageID: "p1", Repo: "owner/known"}},
+			stories:  map[string][]shared.Story{"p1": {storyFor(1)}},
 			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/known"},
 				{Number: 2, Repo: "owner/unknown"},
@@ -125,6 +152,7 @@ func TestEngineRun(t *testing.T) {
 		{
 			name:     "records upsert errors and keeps processing",
 			projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
+			stories:  map[string][]shared.Story{"p1": {storyFor(1), storyFor(2), storyFor(3)}},
 			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/repo"},
 				{Number: 2, Repo: "owner/repo"},
@@ -156,7 +184,7 @@ func TestEngineRun(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			engine := &Engine{
-				NotionClient: &fakeNotion{projects: tc.projects, upsert: tc.upsert},
+				NotionClient: &fakeNotion{projects: tc.projects, stories: tc.stories, upsert: tc.upsert},
 				GithubClient: &fakeGithub{issues: tc.issues},
 			}
 
@@ -169,6 +197,128 @@ func TestEngineRun(t *testing.T) {
 				t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
 			}
 		})
+	}
+}
+
+// TestEngineRunMatchesEveryStoryInAProject guards against the story cache being
+// rebuilt on every match, which used to leave only the last matched issue in the
+// map and made every other issue look storyless (and therefore skipped).
+func TestEngineRunMatchesEveryStoryInAProject(t *testing.T) {
+	quietLogs(t)
+
+	n := &fakeNotion{
+		projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
+		stories:  map[string][]shared.Story{"p1": {storyFor(15), storyFor(16)}},
+		upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
+			return updated(), nil
+		},
+	}
+	engine := &Engine{
+		NotionClient: n,
+		GithubClient: &fakeGithub{issues: []shared.Issue{
+			{Number: 15, Repo: "owner/repo"},
+			{Number: 16, Repo: "owner/repo"},
+		}},
+	}
+
+	got, err := engine.Run(context.Background(), EngineRunOptions{})
+	if err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	want := &Report{Updated: 2}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+	}
+
+	syncedStories := make([]string, 0, len(n.calls))
+	for _, call := range n.calls {
+		syncedStories = append(syncedStories, call.storyInput.Issue)
+	}
+	if diff := cmp.Diff([]string{"15", "16"}, syncedStories); diff != "" {
+		t.Errorf("synced issues mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestEngineRunPassesNilStoryForNewIssues guards the create path: an issue with
+// no story in the project must reach UpsertStory with a nil existingStory. A
+// pointer to the zero value is not nil, so it would send the issue down the
+// update path against an empty page id.
+func TestEngineRunPassesNilStoryForNewIssues(t *testing.T) {
+	quietLogs(t)
+
+	existing := storyFor(1)
+
+	n := &fakeNotion{
+		projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
+		stories:  map[string][]shared.Story{"p1": {existing}},
+		upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
+			if issue.Number == 1 {
+				return updated(), nil
+			}
+			return created(), nil
+		},
+	}
+	engine := &Engine{
+		NotionClient: n,
+		GithubClient: &fakeGithub{issues: []shared.Issue{
+			{Number: 1, Repo: "owner/repo"}, // has a story
+			{Number: 2, Repo: "owner/repo"}, // brand new
+		}},
+	}
+
+	got, err := engine.Run(context.Background(), EngineRunOptions{})
+	if err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	want := &Report{Updated: 1, Created: 1}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+	}
+
+	if len(n.calls) != 2 {
+		t.Fatalf("got %d upsert calls, want 2", len(n.calls))
+	}
+	if diff := cmp.Diff(&existing, n.calls[0].existingStory); diff != "" {
+		t.Errorf("issue 1 existingStory mismatch (-want +got):\n%s", diff)
+	}
+	if n.calls[1].existingStory != nil {
+		t.Errorf("issue 2 existingStory = %+v, want nil", n.calls[1].existingStory)
+	}
+}
+
+// TestEngineRunReportsDuplicateStories verifies that two stories pointing at the
+// same issue are reported once and the first one still syncs.
+func TestEngineRunReportsDuplicateStories(t *testing.T) {
+	quietLogs(t)
+
+	first := shared.Story{PageID: "story-a", Issue: "16"}
+	second := shared.Story{PageID: "story-b", Issue: "16"}
+
+	n := &fakeNotion{
+		projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
+		stories:  map[string][]shared.Story{"p1": {first, second}},
+		upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
+			return updated(), nil
+		},
+	}
+	engine := &Engine{
+		NotionClient: n,
+		GithubClient: &fakeGithub{issues: []shared.Issue{{Number: 16, Repo: "owner/repo"}}},
+	}
+
+	got, err := engine.Run(context.Background(), EngineRunOptions{})
+	if err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	want := &Report{
+		Updated: 1,
+		Errors:  []ReportError{{IssueNumber: 16, Error: "found more than one story for issue"}},
+	}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -227,9 +377,12 @@ func TestEngineRunBuildsStoryInputAndPassesDryRun(t *testing.T) {
 		UpdatedAt: updatedAt,
 	}
 
+	existingStory := storyFor(issue.Number)
+
 	for _, dryRun := range []bool{true, false} {
 		n := &fakeNotion{
 			projects: []shared.Project{{PageID: "page-1", Repo: "owner/repo"}},
+			stories:  map[string][]shared.Story{"page-1": {existingStory}},
 			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				return created(), nil
 			},
@@ -251,7 +404,7 @@ func TestEngineRunBuildsStoryInputAndPassesDryRun(t *testing.T) {
 		if diff := cmp.Diff(issue, call.issue); diff != "" {
 			t.Errorf("UpsertStory issue mismatch (-want +got):\n%s", diff)
 		}
-		wantInput := IssueToStoryInput(issue, nil, "page-1")
+		wantInput := IssueToStoryInput(issue, &existingStory, "page-1")
 		if diff := cmp.Diff(wantInput, call.storyInput); diff != "" {
 			t.Errorf("UpsertStory storyInput mismatch (-want +got):\n%s", diff)
 		}
@@ -263,6 +416,7 @@ func TestEngineRunMatchesRepoCaseInsensitively(t *testing.T) {
 
 	n := &fakeNotion{
 		projects: []shared.Project{{PageID: "p1", Repo: "Owner/Repo-A"}},
+		stories:  map[string][]shared.Story{"p1": {storyFor(1)}},
 		upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 			return created(), nil
 		},
@@ -302,6 +456,7 @@ func TestEngineRunForwardsRepoFilter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			n := &fakeNotion{
 				projects: []shared.Project{{PageID: "p1", Repo: "owner/repo-a"}},
+				stories:  map[string][]shared.Story{"p1": {storyFor(1)}},
 				upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 					return created(), nil
 				},

@@ -17,6 +17,23 @@ import (
 const notionBaseUrl = "https://api.notion.com/v1"
 const notionApiVersion = "2026-03-11"
 const notionMaxPageSize = 100
+const storyDateLayout = "2006-01-02 15:04"
+
+var notionDateLayouts = []string{time.RFC3339, "2006-01-02"}
+
+func parseNotionDate(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+
+	for _, layout := range notionDateLayouts {
+		if parsed, err := time.Parse(layout, raw); err == nil {
+			return parsed.Format(storyDateLayout), nil
+		}
+	}
+
+	return "", fmt.Errorf("parse notion date %q", raw)
+}
 
 type Client struct {
 	Token            string
@@ -120,31 +137,19 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Pr
 	return projects, nil
 }
 
-func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error) {
+func (c *Client) queryStoriesPage(ctx context.Context, filter FilterCondition, cursor string) (*StoriesDataSourceResponse, error) {
 
 	url := fmt.Sprintf("%s/data_sources/%s/query", notionBaseUrl, c.StoriesSourceId)
 
-	filterPayload := &StoryFilterPayload{
-		Filter: FilterCondition{
-			And: []PropertyFilter{
-				{
-					Property: "Issue",
-					Number:   &NumberFilter{Equals: issue.Number},
-				},
-				{
-					Property: "Project",
-					Relation: &RelationFilter{
-						Contains: projectId,
-					},
-				},
-			},
-		},
+	payload := &StoryFilterPayload{
+		Filter:      filter,
+		StartCursor: cursor,
+		PageSize:    notionMaxPageSize,
 	}
 
-	body, err := json.Marshal(filterPayload)
-
+	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("marshal create page payload: %w", err)
+		return nil, fmt.Errorf("marshal stories query payload: %w", err)
 	}
 
 	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
@@ -174,6 +179,98 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 		return nil, err
 	}
 
+	return &data, nil
+}
+
+func (c *Client) ListStoriesByProject(ctx context.Context, projectId string) ([]shared.Story, error) {
+
+	filter := FilterCondition{
+		And: []PropertyFilter{
+			{
+				Property: "Project",
+				Relation: &RelationFilter{
+					Contains: projectId,
+				},
+			},
+		},
+	}
+
+	var stories []shared.Story
+	cursor := ""
+
+	for {
+		data, err := c.queryStoriesPage(ctx, filter, cursor)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, result := range data.Results {
+			var story shared.Story
+
+			labels := make([]string, len(result.Properties.Labels.MultiSelect))
+
+			for i, label := range result.Properties.Labels.MultiSelect {
+				labels[i] = label.Name
+			}
+
+			lastWorkedAt, err := parseNotionDate(result.Properties.LastWorkedAt.Date.Start)
+			if err != nil {
+				return nil, err
+			}
+
+			finishedAt, err := parseNotionDate(result.Properties.FinishedDate.Date.Start)
+			if err != nil {
+				return nil, err
+			}
+
+			story.PageID = result.ID
+			story.Issue = fmt.Sprintf("%d", result.Properties.Issue.Number)
+			story.CreatedAt = result.Properties.CreatedTime.Date
+			story.Labels = labels
+			story.LastWorkedAt = lastWorkedAt
+			story.FinishedAt = finishedAt
+			story.Status = result.Properties.Status.Status.Name
+			story.Project = result.Properties.Project.Relation[0].ID
+			story.Url = result.Properties.URL.URL
+			story.Name = result.Properties.Name.Title[0].PlainText
+
+			stories = append(stories, story)
+		}
+
+		if !data.HasMore || data.NextCursor == "" {
+			break
+		}
+
+		cursor = data.NextCursor
+	}
+
+	return stories, nil
+}
+
+func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error) {
+
+	filter := FilterCondition{
+		And: []PropertyFilter{
+			{
+				Property: "Issue",
+				Number:   &NumberFilter{Equals: issue.Number},
+			},
+			{
+				Property: "Project",
+				Relation: &RelationFilter{
+					Contains: projectId,
+				},
+			},
+		},
+	}
+
+	// A story is unique per project + issue, so the first page holds every
+	// match and the duplicate check below stays meaningful.
+	data, err := c.queryStoriesPage(ctx, filter, "")
+	if err != nil {
+		return nil, err
+	}
+
 	if len(data.Results) == 0 {
 		return nil, nil
 	}
@@ -191,29 +288,21 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 			labels[i] = label.Name
 		}
 
-		notionTimeLayout := "2006-01-02T15:04:05.000+00:00"
-
-		lastWorkedAt, err := time.Parse(notionTimeLayout, result.Properties.LastWorkedAt.Date.Start)
+		lastWorkedAt, err := parseNotionDate(result.Properties.LastWorkedAt.Date.Start)
 		if err != nil {
 			return nil, err
 		}
 
-		var finishedAt string
-
-		if result.Properties.FinishedDate.Date.Start != "" {
-			parsedDinishedAt, err := time.Parse(notionTimeLayout, result.Properties.FinishedDate.Date.Start)
-			if err != nil {
-				return nil, err
-			}
-
-			finishedAt = parsedDinishedAt.Format("2006-01-02 15:04")
+		finishedAt, err := parseNotionDate(result.Properties.FinishedDate.Date.Start)
+		if err != nil {
+			return nil, err
 		}
 
 		story.PageID = result.ID
 		story.Issue = fmt.Sprintf("%d", result.Properties.Issue.Number)
 		story.CreatedAt = result.Properties.CreatedTime.Date
 		story.Labels = labels
-		story.LastWorkedAt = lastWorkedAt.Format("2006-01-02 15:04")
+		story.LastWorkedAt = lastWorkedAt
 		story.FinishedAt = finishedAt
 		story.Status = result.Properties.Status.Status.Name
 		story.Project = result.Properties.Project.Relation[0].ID

@@ -112,6 +112,8 @@ type StoriesDataSourceResponse struct {
 			Name         TitleProperty       `json:"Name"`
 		} `json:"properties"`
 	}
+	HasMore    bool   `json:"has_more"`
+	NextCursor string `json:"next_cursor"`
 }
 
 type NumberFilter struct {
@@ -134,7 +136,9 @@ type FilterCondition struct {
 }
 
 type StoryFilterPayload struct {
-	Filter FilterCondition `json:"filter"`
+	Filter      FilterCondition `json:"filter"`
+	StartCursor string          `json:"start_cursor,omitempty"`
+	PageSize    int             `json:"page_size,omitempty"`
 }
 
 type StoryProperties struct {
