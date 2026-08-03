@@ -175,8 +175,8 @@ Environment variables prefixed with `FORGESYNC_` override the file's values.
 ```yaml
 github_token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 notion_token: ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-projects_source_id: 2fbb053d-a558-8039-9bd5-000bec9a0d57
-stories_source_id: 362b053d-a558-80b7-95fb-000bc69d7347
+projects_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+stories_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 ### Overriding with environment variables
@@ -184,8 +184,8 @@ stories_source_id: 362b053d-a558-80b7-95fb-000bc69d7347
 ```sh
 export FORGESYNC_GITHUB_TOKEN=ghp_...
 export FORGESYNC_NOTION_TOKEN=ntn_...
-export FORGESYNC_PROJECTS_SOURCE_ID=2fbb053d-a558-8039-9bd5-000bec9a0d57
-export FORGESYNC_STORIES_SOURCE_ID=362b053d-a558-80b7-95fb-000bc69d7347
+export FORGESYNC_PROJECTS_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+export FORGESYNC_STORIES_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
 ---
