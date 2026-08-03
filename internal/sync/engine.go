@@ -112,6 +112,14 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 			existingStory = &story
 		}
 
+		// Deciding that a Story needs no write is a sync rule, not an adapter
+		// concern, so the engine short-circuits before touching Notion at all.
+		if IsSynced(issue, existingStory) {
+			unchanged++
+			slog.Debug(fmt.Sprintf("[SYNC]: Unchanged - Number: %d Title %s Project: %s", issue.Number, issue.Title, project.Name))
+			continue
+		}
+
 		storyInput := IssueToStoryInput(issue, existingStory, project.PageID)
 		result, err := e.NotionClient.UpsertStory(ctx, storyInput, issue, options.DryRun, existingStory)
 		if err != nil {
@@ -127,8 +135,6 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 			created++
 		} else if result.Updated {
 			updated++
-		} else if result.Unchanged {
-			unchanged++
 		}
 		slog.Debug(fmt.Sprintf("[SYNC]: Issue - Number: %d Title %s <-> Story - Status: %s Project: %s", issue.Number, issue.Title, storyInput.Status, project.Name))
 	}

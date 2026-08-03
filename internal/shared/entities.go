@@ -37,9 +37,8 @@ type Issue struct {
 }
 
 type UpsertResult struct {
-	Created   bool
-	Updated   bool
-	Unchanged bool
+	Created bool
+	Updated bool
 }
 
 type StoryInput struct {

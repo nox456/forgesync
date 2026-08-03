@@ -84,9 +84,21 @@ func storyFor(issueNumber int) shared.Story {
 	}
 }
 
-func created() *shared.UpsertResult   { return &shared.UpsertResult{Created: true} }
-func updated() *shared.UpsertResult   { return &shared.UpsertResult{Updated: true} }
-func unchanged() *shared.UpsertResult { return &shared.UpsertResult{Unchanged: true} }
+// syncedStoryFor builds a story that already matches its issue in every field
+// IsSynced compares, so the engine reports it as Unchanged without upserting.
+func syncedStoryFor(issue shared.Issue) shared.Story {
+	return shared.Story{
+		PageID:       fmt.Sprintf("story-%d", issue.Number),
+		Issue:        fmt.Sprintf("%d", issue.Number),
+		Name:         issue.Title,
+		Status:       ComputeStatus(issue, ""),
+		Labels:       issue.Labels,
+		LastWorkedAt: issue.UpdatedAt.Format(storyDateLayout),
+	}
+}
+
+func created() *shared.UpsertResult { return &shared.UpsertResult{Created: true} }
+func updated() *shared.UpsertResult { return &shared.UpsertResult{Updated: true} }
 
 // quietLogs silences slog output for the duration of a test so the Run logs
 // don't clutter the test output, restoring the previous default afterwards.
@@ -99,6 +111,16 @@ func quietLogs(t *testing.T) {
 
 func TestEngineRun(t *testing.T) {
 	quietLogs(t)
+
+	// syncedIssue's story already matches it, so the engine must count it as
+	// Unchanged on its own rather than asking Notion to work that out.
+	syncedIssue := shared.Issue{
+		Number:    3,
+		Title:     "Already in sync",
+		Repo:      "owner/repo-b",
+		State:     "open",
+		UpdatedAt: time.Date(2026, 5, 20, 10, 30, 0, 0, time.UTC),
+	}
 
 	cases := []struct {
 		name     string
@@ -116,12 +138,12 @@ func TestEngineRun(t *testing.T) {
 			},
 			stories: map[string][]shared.Story{
 				"p1": {storyFor(1), storyFor(2)},
-				"p2": {storyFor(3)},
+				"p2": {syncedStoryFor(syncedIssue)},
 			},
 			issues: []shared.Issue{
 				{Number: 1, Repo: "owner/repo-a"},
 				{Number: 2, Repo: "owner/repo-a"},
-				{Number: 3, Repo: "owner/repo-b"},
+				syncedIssue,
 			},
 			upsert: func(issue shared.Issue) (*shared.UpsertResult, error) {
 				switch issue.Number {
@@ -130,7 +152,8 @@ func TestEngineRun(t *testing.T) {
 				case 2:
 					return updated(), nil
 				default:
-					return unchanged(), nil
+					t.Fatalf("UpsertStory called for issue %d, which is already in sync", issue.Number)
+					return nil, nil
 				}
 			},
 			want: &Report{Created: 1, Updated: 1, Unchanged: 1},
@@ -319,6 +342,47 @@ func TestEngineRunReportsDuplicateStories(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
 		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestEngineRunSkipsUpsertForSyncedStories pins the decision that used to live
+// inside the Notion adapter: an in-sync Story is counted as Unchanged by the
+// engine itself, without a round trip to Notion, dry run or not.
+func TestEngineRunSkipsUpsertForSyncedStories(t *testing.T) {
+	quietLogs(t)
+
+	issue := shared.Issue{
+		Number:    7,
+		Title:     "Nothing to do",
+		Repo:      "owner/repo",
+		State:     "open",
+		Labels:    []string{"chore"},
+		UpdatedAt: time.Date(2026, 5, 20, 10, 30, 0, 0, time.UTC),
+	}
+
+	for _, dryRun := range []bool{true, false} {
+		n := &fakeNotion{
+			projects: []shared.Project{{PageID: "p1", Repo: "owner/repo"}},
+			stories:  map[string][]shared.Story{"p1": {syncedStoryFor(issue)}},
+			upsert: func(shared.Issue) (*shared.UpsertResult, error) {
+				t.Fatalf("UpsertStory called for an already-synced issue (dryRun=%v)", dryRun)
+				return nil, nil
+			},
+		}
+		engine := &Engine{NotionClient: n, GithubClient: &fakeGithub{issues: []shared.Issue{issue}}}
+
+		got, err := engine.Run(context.Background(), EngineRunOptions{DryRun: dryRun})
+		if err != nil {
+			t.Fatalf("Run() unexpected error: %v", err)
+		}
+
+		want := &Report{Unchanged: 1}
+		if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+			t.Errorf("Run(dryRun=%v) report mismatch (-want +got):\n%s", dryRun, diff)
+		}
+		if len(n.calls) != 0 {
+			t.Errorf("UpsertStory called %d times, want 0", len(n.calls))
+		}
 	}
 }
 

@@ -313,24 +313,27 @@ forgesync/
     ├── output/            # text & JSON printers
     ├── shared/            # domain types (Issue, Project, Story, …)
     ├── status/            # read-only report behind `forgesync status`
-    ├── sync/              # orchestration & status mapping rules
-    └── utils/             # cross-package helpers (IsSynced)
+    └── sync/              # orchestration & sync rules
 ```
 
-`internal/shared` is the leaf: it holds the domain types and imports nothing
-else of ours. The adapters (`internal/github`, `internal/notion`) own their
-SDKs and speak `shared` types outward, so swapping an SDK stays a one-package
-change. `internal/sync` orchestrates over those types and does not import
-`internal/notion` at all.
+Dependencies only ever point downwards:
 
-> **Known wart — the dependency arrow is reversed in one place.**
-> `internal/notion` imports `internal/utils` (for `IsSynced`), and
-> `internal/utils` imports `internal/sync` (for `ComputeStatus`), so the
-> adapter transitively depends on the orchestrator. It compiles today only
-> because `internal/sync` never imports `internal/notion` back; the moment it
-> does, Go refuses to build with an import cycle rather than warning. The fix
-> is to move `ComputeStatus`/`IsSynced` down next to the domain types they
-> compare, keeping the leaf free of opinions.
+```
+cli → output → status → sync → github → shared
+                  └──────────→ notion → shared
+```
+
+`internal/shared` is the leaf: domain types, no imports of our own, no
+opinions. The adapters (`internal/github`, `internal/notion`) own their SDKs
+and speak `shared` types outward, so swapping an SDK stays a one-package
+change — neither one knows a sync exists. `internal/sync` owns every rule
+about *what* should happen (`ComputeStatus`, `IsSynced`, `IssueToStoryInput`)
+and drives the adapters through interfaces it declares itself. `internal/status`
+is a read-only sibling that reuses those rules to preview a run.
+
+The one decision that could tempt an adapter upwards — "does this Story even
+need writing?" — lives in the engine, which checks `IsSynced` before calling
+`UpsertStory`. That keeps `internal/notion` a dumb pipe to the API.
 
 ---
 
@@ -376,7 +379,7 @@ change. `internal/sync` orchestrates over those types and does not import
 - [x] Unit tests on `sync/mapping` and `sync/status`
 - [x] Structured logging via `log/slog`
 - [x] Optional `--repo owner/name` flag to sync a single repo
+- [x] Break the `notion` → `utils` → `sync` dependency
 - [ ] Configurable fetch window (currently a fixed 7 days)
 - [ ] Cache the Projects map between runs
 - [ ] Guard the Notion decoders against renamed or missing properties
-- [ ] Break the `notion` → `utils` → `sync` dependency

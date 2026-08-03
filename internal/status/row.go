@@ -5,7 +5,6 @@ import (
 
 	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/sync"
-	"github.com/nox456/forgesync/internal/utils"
 )
 
 type Row struct {
@@ -19,7 +18,7 @@ type Row struct {
 }
 
 func BuildRow(issue shared.Issue, project *shared.Project, existingStory *shared.Story) Row {
-	isSynced := utils.IsSynced(issue, existingStory)
+	isSynced := sync.IsSynced(issue, existingStory)
 	var status string
 
 	if existingStory == nil {

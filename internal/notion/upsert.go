@@ -10,7 +10,6 @@ import (
 	"net/http"
 
 	"github.com/nox456/forgesync/internal/shared"
-	"github.com/nox456/forgesync/internal/utils"
 )
 
 func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, issue shared.Issue, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error) {
@@ -93,12 +92,6 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, 
 			Created: true,
 		}, nil
 	} else {
-
-		if utils.IsSynced(issue, existingStory) {
-			return &shared.UpsertResult{
-				Unchanged: true,
-			}, nil
-		}
 
 		if isDryRun {
 			return &shared.UpsertResult{
