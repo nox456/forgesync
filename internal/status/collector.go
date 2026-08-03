@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
@@ -41,7 +42,7 @@ func (c *Collector) Collect(ctx context.Context, repoName string) ([]Row, error)
 	projectsMap := make(map[string]shared.Project)
 
 	for _, project := range projects {
-		projectsMap[project.Repo] = project
+		projectsMap[strings.ToLower(project.Repo)] = project
 	}
 
 	slog.Info("Fetching github issues...")
@@ -55,7 +56,7 @@ func (c *Collector) Collect(ctx context.Context, repoName string) ([]Row, error)
 	slog.Info("Building rows...")
 	for _, issue := range issues {
 		slog.Debug(fmt.Sprintf("[STATUS]: Building row - IssueNumber %d Repo %s", issue.Number, issue.Repo))
-		project, ok := projectsMap[issue.Repo]
+		project, ok := projectsMap[strings.ToLower(issue.Repo)]
 		if !ok {
 			slog.Debug(fmt.Sprintf("[STATUS]: Project not found - IssueNumber %d Repo %s", issue.Number, issue.Repo))
 			rows = append(rows, BuildRow(issue, nil, nil))
