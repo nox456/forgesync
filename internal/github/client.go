@@ -66,7 +66,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]sh
 		hasLinkedPR := false
 
 		if *issueResponse.State == "open" {
-			hasLinkedPR, err = c.hasConnectedPR(ctx, owner, repo, *issueResponse.Number)
+			hasLinkedPR, err = c.hasLinkedPR(ctx, owner, repo, *issueResponse.Number)
 			if err != nil {
 				return nil, err
 			}
@@ -92,30 +92,62 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]sh
 	return issues, nil
 }
 
-func (c *Client) hasConnectedPR(ctx context.Context, owner, repo string, number int) (bool, error) {
-	opts := &github.ListOptions{PerPage: 100}
-	connections := 0
-
-	for {
-		events, resp, err := c.gh.Issues.ListIssueTimeline(ctx, owner, repo, number, opts)
-		if err != nil {
-			return false, err
-		}
-
-		for _, event := range events {
-			switch event.GetEvent() {
-			case "connected":
-				connections++
-			case "disconnected":
-				connections--
+func (c *Client) hasLinkedPR(ctx context.Context, owner, repo string, number int) (bool, error) {
+	query := map[string]any{
+		"query": `query($owner: String!, $repo: String!, $number: Int!) {
+			repository(owner: $owner, name: $repo) {
+				issue(number: $number) {
+					closedByPullRequestsReferences(first: 100, includeClosedPrs: true) {
+						nodes { number isDraft }
+					}
+				}
 			}
-		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
+		}`,
+		"variables": map[string]any{
+			"owner":  owner,
+			"repo":   repo,
+			"number": number,
+		},
 	}
 
-	return connections > 0, nil
+	req, err := c.gh.NewRequest(ctx, "POST", "graphql", query)
+	if err != nil {
+		return false, err
+	}
+
+	var response struct {
+		Data struct {
+			Repository struct {
+				Issue struct {
+					ClosedByPullRequestsReferences struct {
+						Nodes []struct {
+							Number  int  `json:"number"`
+							IsDraft bool `json:"isDraft"`
+						} `json:"nodes"`
+					} `json:"closedByPullRequestsReferences"`
+				} `json:"issue"`
+			} `json:"repository"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+
+	if _, err := c.gh.Do(req, &response); err != nil {
+		return false, err
+	}
+
+	if len(response.Errors) > 0 {
+		return false, fmt.Errorf("github graphql: %s", response.Errors[0].Message)
+	}
+
+	for _, pr := range response.Data.Repository.Issue.ClosedByPullRequestsReferences.Nodes {
+		if pr.IsDraft {
+			slog.Debug(fmt.Sprintf("[GITHUB]: Skipping draft PR #%d linked to %s/%s#%d", pr.Number, owner, repo, number))
+			continue
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
