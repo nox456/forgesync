@@ -10,13 +10,13 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 }
 
-var version = "dev"
+var VERSION = "dev"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of ForgeSync",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println(version)
+		fmt.Println(VERSION)
 
 		return nil
 	},

@@ -63,9 +63,11 @@ edits survive instead of being overwritten:
 that you have started work, and the sync promotes it to `In PR` when a PR
 appears — so the option still has to exist in your database.
 
-Linked-PR detection walks the issue's REST timeline
-(`ListIssueTimeline`) and counts `connected` minus `disconnected` events; a
-positive total means a PR is linked.
+Linked-PR detection asks GitHub's GraphQL API for the issue's
+`closedByPullRequestsReferences` — the PRs linked to it with a closing keyword
+(`Fixes #12`) or through the Development sidebar. The issue counts as having a
+linked PR when at least one of them is **not a draft**. Closed-but-unmerged PRs
+are included in that list, so they count too.
 
 ### What it does NOT touch
 
@@ -131,6 +133,9 @@ curl -fsSL https://github.com/nox456/forgesync/releases/latest/download/install.
 > - **Needs `curl` (or `wget`) and `tar`.** Checksum verification additionally
 >   uses `sha256sum` or `shasum`; if neither is found, verification is skipped
 >   with a warning rather than failing.
+> - **`forgesync version` needs a config file.** The script suggests running it
+>   to verify the install, but it fails until you've created `config.yaml`
+>   (see [Configuration](#configuration)).
 
 ### With Go
 
@@ -158,8 +163,10 @@ go build -o forgesync ./cmd/forgesync
 `~/.config/forgesync/config.yaml`, provided `XDG_CONFIG_HOME` is set).
 Environment variables prefixed with `FORGESYNC_` override the file's values.
 
-> **Note:** a config file must exist — the CLI errors out if it cannot find
-> one, even when every value is also provided through environment variables.
+> **Note:** a config file must exist, and every required value must be set,
+> before **any** command runs — `version` and `config` included. The CLI errors
+> out if it cannot find the file, even when every value is also provided
+> through environment variables.
 
 ### Required values
 
@@ -194,10 +201,10 @@ export FORGESYNC_STORIES_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 ### Global flags
 
-| Flag        | Description                          |
-| ----------- | ------------------------------------ |
-| `--json`    | Print output as JSON                 |
-| `--verbose` | Enable debug-level logging           |
+| Flag        | Description                                                        |
+| ----------- | ------------------------------------------------------------------ |
+| `--json`    | Print output as JSON. Also discards all logs, `--verbose` included |
+| `--verbose` | Enable debug-level logging on stderr (no effect with `--json`)     |
 
 `--repo owner/name` is **not** global: only `sync` and `status` accept it. See
 those sections below.
@@ -233,10 +240,14 @@ forgesync status --repo owner/name
 
 ### Dry run — preview what would happen
 
-No writes to Notion. Just prints the planned actions.
+No writes to Notion. It prints the same summary a real sync would — the
+`Created` / `Updated` / `Unchanged` / `Skipped` counts plus any errors — not a
+per-issue plan. Add `--verbose` (without `--json`) to see a debug line for each
+issue that would be written or is unchanged.
 
 ```sh
 forgesync sync --dry-run   # or -d
+forgesync sync --dry-run --verbose
 ```
 
 ### Real sync
@@ -252,11 +263,16 @@ forgesync sync --repo owner/name   # restrict to a single repo
 
 ### Inspect the loaded configuration
 
+Prints every loaded value, tokens included, in plain text.
+
 ```sh
 forgesync config
 ```
 
 ### Print the version
+
+Like every command, it loads the config first, so it fails if no config file
+exists.
 
 ```sh
 forgesync version
@@ -308,7 +324,7 @@ forgesync/
 └── internal/
     ├── cli/               # cobra commands
     ├── config/            # env + file config loading
-    ├── github/            # GitHub adapter (issues + REST timeline)
+    ├── github/            # GitHub adapter (REST issues + GraphQL PR links)
     ├── notion/            # Notion adapter (data sources API: reads + writes)
     ├── output/            # text & JSON printers
     ├── shared/            # domain types (Issue, Project, Story, …)
@@ -322,6 +338,11 @@ Dependencies only ever point downwards:
 cli → output → status → sync → github → shared
                   └──────────→ notion → shared
 ```
+
+The graph shows the main path. Two shortcuts sit alongside it: `status` also
+imports `github` and `notion` directly, only for the concrete client types in
+`NewCollector`, and `sync` imports `github` only for the pure
+`NormalizeGithubBody` helper.
 
 `internal/shared` is the leaf: domain types, no imports of our own, no
 opinions. The adapters (`internal/github`, `internal/notion`) own their SDKs
@@ -348,18 +369,30 @@ need writing?" — lives in the engine, which checks `IsSynced` before calling
   value, so those reads fail with `index out of range` and a stack trace. If
   you rename a property, rename it back or update the code — the CLI has no
   friendlier path yet.
-- **Duplicate Stories are reported, not fatal.** The sync key is
-  (Project, issue number), so two repos sharing issue #42 no longer collide.
-  If a single Project does end up with two Stories carrying the same `Issue`
-  number, `sync` keeps the first, records `found more than one story for issue`
-  against that issue, and continues with the rest. `status` is stricter: it
-  aborts with `found more than one story for issue N`.
+- **Duplicate-Story errors can be false positives.** Story lookup is keyed by
+  (Project, issue number), so the right Story is always the one that syncs.
+  The duplicate check, however, compares each Project's Stories against
+  **every** assigned issue by number alone. If two of your assigned issues
+  share a number across repos — or one of them is in a repo with no Project —
+  `sync` reports `found more than one story for issue N` even though nothing
+  is duplicated. A real duplicate (two Stories in one Project with the same
+  `Issue` number) produces the same error; `sync` keeps the first Story and
+  continues with the rest. `status` is stricter: it looks Stories up per
+  (Project, issue), so it only sees real duplicates, and aborts on them with
+  `found more than one story for issue N`.
 - **Rate limits.** Notion limits writes to ~3 req/s. For a typical personal
   workspace this is well under the threshold. If you have hundreds of issues
   you may want to add backoff.
-- **Linked-PR detection is heuristic.** A PR that isn't surfaced as a
-  `connected` timeline event (for example, one that only mentions the issue
-  without a closing keyword) may not be detected.
+- **Linked-PR detection only sees closing references.** A PR that just
+  mentions the issue, without a closing keyword or a Development-sidebar link,
+  is never detected. Draft PRs are ignored until they're marked ready. A
+  closed-but-unmerged PR still counts as linked. Only the first 100 linked PRs
+  are checked.
+- **`--json` silences all logs.** With `--json`, nothing is written to stderr
+  except a fatal error — not even `--verbose` debug output.
+- **Fatal errors are printed twice.** When a command aborts, the error appears
+  on stderr twice — once prefixed with `Error:` and followed by the usage text,
+  and once plain — and the process exits with status 1.
 - **Time zones.** Dates are written as `YYYY-MM-DD HH:MM` in UTC (the timezone
   offset is dropped). Notion displays them in your local time zone, so a value
   can read a few hours — or a day — off from the GitHub timestamp.
