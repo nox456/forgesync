@@ -25,6 +25,12 @@ var rootCmd = &cobra.Command{
 	Use:   "forgesync",
 	Short: "ForgeSync is a CLI tool for syncing Notion databases with GitHub repositories",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		group := cmd.Annotations["group"]
+
+		if group == "internal" {
+			return nil
+		}
+
 		config, err := config.Load()
 		if err != nil {
 			return err
