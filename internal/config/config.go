@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -56,4 +57,14 @@ func Load() (*Config, error) {
 		ProjectsSourceId: viper.GetString("projects_source_id"),
 		StoriesSourceId:  viper.GetString("stories_source_id"),
 	}, nil
+}
+
+func ShouldLoadConfig(cmd *cobra.Command) bool {
+	group := cmd.Annotations["group"]
+
+	if group == "internal" {
+		return false
+	}
+
+	return true
 }
