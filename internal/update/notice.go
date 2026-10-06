@@ -7,12 +7,6 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
-type State struct {
-	LastCheckedAt       time.Time `json:"last_checked_at"`
-	LatestVersion       string    `json:"latest_version"`
-	UpdateCheckInterval string    `json:"update_check_interval"`
-}
-
 func IsNewer(current string, latest string) bool {
 	currentVersion, err := semver.NewVersion(current)
 	if err != nil {
