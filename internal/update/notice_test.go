@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 func TestIsNewer(t *testing.T) {
@@ -96,6 +98,56 @@ func TestNewNotice(t *testing.T) {
 			got := NewNotice(tc.latest)
 			if !strings.Contains(got, tc.wantPart) {
 				t.Errorf("NewNotice(%q) = %q, want it to contain %q", tc.latest, got, tc.wantPart)
+			}
+		})
+	}
+}
+
+func TestShouldNotify(t *testing.T) {
+	command := func(name string) func() *cobra.Command {
+		return func() *cobra.Command { return &cobra.Command{Use: name} }
+	}
+	completionChild := func(shell string) func() *cobra.Command {
+		return func() *cobra.Command {
+			parent := &cobra.Command{Use: "completion"}
+			child := &cobra.Command{Use: shell}
+			parent.AddCommand(child)
+			return child
+		}
+	}
+	exempt := func() *cobra.Command {
+		return &cobra.Command{Use: "version", Annotations: map[string]string{"group": "internal"}}
+	}
+
+	cases := []struct {
+		name     string
+		cmd      func() *cobra.Command
+		version  string
+		terminal bool
+		want     bool
+	}{
+		// happy path
+		{name: "normal command on a terminal with a real version notifies", cmd: command("status"), version: "0.9.0", terminal: true, want: true},
+		{name: "exempt version command still notifies", cmd: exempt, version: "0.9.0", terminal: true, want: true},
+		// edge cases: shell completion never notifies, even on a terminal
+		{name: "__complete request is skipped", cmd: command(cobra.ShellCompRequestCmd), version: "0.9.0", terminal: true, want: false},
+		{name: "__completeNoDesc request is skipped", cmd: command(cobra.ShellCompNoDescRequestCmd), version: "0.9.0", terminal: true, want: false},
+		{name: "completion command is skipped", cmd: command("completion"), version: "0.9.0", terminal: true, want: false},
+		{name: "completion zsh subcommand is skipped", cmd: completionChild("zsh"), version: "0.9.0", terminal: true, want: false},
+		{name: "completion bash subcommand is skipped", cmd: completionChild("bash"), version: "0.9.0", terminal: true, want: false},
+		{name: "command named like a shell outside completion still notifies", cmd: command("bash"), version: "0.9.0", terminal: true, want: true},
+		// error path: inputs that must never touch the network or the state file
+		{name: "dev build never notifies", cmd: command("status"), version: "dev", terminal: true, want: false},
+		{name: "stderr that is not a terminal never notifies", cmd: command("status"), version: "0.9.0", terminal: false, want: false},
+		{name: "dev build off a terminal never notifies", cmd: command("status"), version: "dev", terminal: false, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := tc.cmd()
+			got := ShouldNotify(cmd, tc.version, tc.terminal)
+			if got != tc.want {
+				t.Errorf("ShouldNotify(%q, %q, %v) = %v, want %v", cmd.CommandPath(), tc.version, tc.terminal, got, tc.want)
 			}
 		})
 	}

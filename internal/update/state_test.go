@@ -264,3 +264,31 @@ func entryNames(entries []os.DirEntry) []string {
 	}
 	return names
 }
+
+func TestStateInterval(t *testing.T) {
+	cases := []struct {
+		name     string
+		interval string
+		want     time.Duration
+	}{
+		// happy path
+		{name: "user-set 12h interval is parsed", interval: "12h", want: 12 * time.Hour},
+		{name: "user-set 30m interval is parsed", interval: "30m", want: 30 * time.Minute},
+		// edge cases
+		{name: "zero interval is kept so the check stays disabled", interval: "0", want: 0},
+		{name: "empty interval from a missing file falls back to 6h", interval: "", want: 6 * time.Hour},
+		{name: "negative interval is kept and disables the check", interval: "-1h", want: -1 * time.Hour},
+		// error path: an unparseable value degrades to the default
+		{name: "invalid interval falls back to 6h", interval: "abc", want: 6 * time.Hour},
+		{name: "interval without a unit falls back to 6h", interval: "6", want: 6 * time.Hour},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := State{UpdateCheckInterval: tc.interval}.Interval()
+			if got != tc.want {
+				t.Errorf("State{UpdateCheckInterval: %q}.Interval() = %v, want %v", tc.interval, got, tc.want)
+			}
+		})
+	}
+}

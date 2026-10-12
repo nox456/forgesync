@@ -73,6 +73,9 @@ func (r *Refresh) Wait() error {
 }
 
 func (r *Refresh) save(res result) error {
+	if r.state.UpdateCheckInterval == "" {
+		r.state.UpdateCheckInterval = DefaultInterval
+	}
 	if res.err == nil {
 		r.state.LatestVersion = res.latest
 		r.state.LastCheckedAt = r.n.Now()
