@@ -13,6 +13,7 @@ import (
 
 var fileName = "update-check.yaml"
 var tempFileName = "update-check.yaml.tmp"
+var DefaultInterval = "6h"
 
 type State struct {
 	LastCheckedAt       time.Time `yaml:"last_checked_at"`
@@ -52,7 +53,7 @@ func (s *Store) Load() (State, error) {
 	}
 
 	if _, err := time.ParseDuration(state.UpdateCheckInterval); err != nil {
-		state.UpdateCheckInterval = "6h"
+		state.UpdateCheckInterval = DefaultInterval
 	}
 
 	return state, nil
@@ -87,4 +88,16 @@ func (s *Store) Save(state State) error {
 	}
 
 	return nil
+}
+
+func (s State) Interval() time.Duration {
+	d, err := time.ParseDuration(s.UpdateCheckInterval)
+
+	if err != nil {
+		d, _ := time.ParseDuration(DefaultInterval)
+
+		return d
+	}
+
+	return d
 }
