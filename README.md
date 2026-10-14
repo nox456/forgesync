@@ -133,9 +133,10 @@ curl -fsSL https://github.com/nox456/forgesync/releases/latest/download/install.
 > - **Needs `curl` (or `wget`) and `tar`.** Checksum verification additionally
 >   uses `sha256sum` or `shasum`; if neither is found, verification is skipped
 >   with a warning rather than failing.
-> - **`forgesync version` needs a config file.** The script suggests running it
->   to verify the install, but it fails until you've created `config.yaml`
->   (see [Configuration](#configuration)).
+> - **A system-wide install updates with `sudo`.** `forgesync update` replaces
+>   the binary in place, so with the default `/usr/local/bin` it needs
+>   `sudo forgesync update` (see [Update forgesync](#update-forgesync)). Installing
+>   to `~/.local/bin` avoids that.
 
 ### With Go
 
@@ -145,6 +146,8 @@ go install github.com/nox456/forgesync/cmd/forgesync@latest
 
 Replace `@latest` with a tag (e.g. `@v0.1.0`) to pin a version. This compiles
 from source, so the resulting binary depends on your local Go toolchain.
+`forgesync update` doesn't replace a binary installed this way. It prints this
+same `go install` command instead.
 
 ### From source
 
@@ -164,9 +167,9 @@ go build -o forgesync ./cmd/forgesync
 Environment variables prefixed with `FORGESYNC_` override the file's values.
 
 > **Note:** a config file must exist, and every required value must be set,
-> before **any** command runs — `version` and `config` included. The CLI errors
-> out if it cannot find the file, even when every value is also provided
-> through environment variables.
+> before any command runs except `version` and `update`, which never read it.
+> `config` included, every other command errors out if it can't find the file,
+> even when every value is also provided through environment variables.
 
 ### Required values
 
@@ -203,7 +206,7 @@ export FORGESYNC_STORIES_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
 | Flag        | Description                                                        |
 | ----------- | ------------------------------------------------------------------ |
-| `--json`    | Print output as JSON. Also discards all logs, `--verbose` included |
+| `--json`    | Print output as JSON. Also discards all logs, `--verbose` included. `update` rejects it |
 | `--verbose` | Enable debug-level logging on stderr (no effect with `--json`)     |
 
 `--repo owner/name` is **not** global: only `sync` and `status` accept it. See
@@ -271,12 +274,77 @@ forgesync config
 
 ### Print the version
 
-Like every command, it loads the config first, so it fails if no config file
-exists.
+Doesn't read the config, so it works right after installing.
 
 ```sh
 forgesync version
 ```
+
+### Update forgesync
+
+Replaces the running binary with the latest GitHub release, after you
+confirm. The download is checked against the release's `checksums.txt` before
+the binary is touched. Doesn't read the config.
+
+```sh
+forgesync update
+```
+
+```
+Update forgesync 0.9.0 → 0.10.0? [y/N] y
+Downloading forgesync 0.10.0…
+Updated forgesync 0.9.0 → 0.10.0
+Release notes: https://github.com/nox456/forgesync/releases/tag/v0.10.0
+```
+
+- Only `y` or `yes` (any case) confirms. Enter, any other answer, or an empty
+  stdin cancels, so a closed stdin never replaces the binary. To confirm from a
+  script, pipe the answer: `echo y | forgesync update`.
+- When you're already on the latest release, it says so and doesn't prompt.
+- When the install directory isn't writable (the install script's default
+  `/usr/local/bin`), it exits 1 and tells you to rerun with
+  `sudo forgesync update`. It never runs `sudo` itself. On Windows, rerun from
+  a terminal opened with "Run as administrator".
+- A binary installed with `go install` isn't replaced. `update` prints the
+  `go install …@latest` command to run instead. A local `go build` (version
+  `dev`) is refused as well.
+- No `--check` flag and no `--json` output. To see whether an update exists
+  without installing it, answer `n` at the prompt.
+
+### Update notice
+
+When a newer release exists, every command prints a one-line notice on
+**stderr** before its own output:
+
+```
+Update available! -> 0.10.0. Run: forgesync update
+```
+
+The notice reads a cached check, so it never waits on the network. When the
+cache is older than the check interval (6 hours by default), the command
+refreshes it in the background, from the unauthenticated GitHub Releases API
+(or authenticated, if `GITHUB_TOKEN` is set). The refresh runs alongside the
+command and is capped at 2 seconds from its start, so only a fast command on a
+slow network waits for it. A failed refresh is silent unless you pass
+`--verbose`, and the next command retries it.
+
+- The notice, and the background refresh, only run when **stderr is a
+  terminal**. Pipes, redirects, CI logs and editor integrations
+  (forgesync.nvim) get neither, and `--json` output on stdout is never touched.
+- Shell completion and `dev` builds never show it.
+- The cache lives in its own state file, not in `config.yaml`:
+  `$XDG_STATE_HOME/forgesync/update-check.yaml` (or
+  `~/.local/state/forgesync/update-check.yaml` when `XDG_STATE_HOME` is unset).
+
+```yaml
+last_checked_at: 2026-10-13T09:30:00Z
+latest_version: 0.10.0
+update_check_interval: 6h
+```
+
+`update_check_interval` takes a Go duration (`30m`, `12h`, `24h`). Set it to
+`0` to turn the background check off. A newer version already in the cache
+still prints until you update. A missing or invalid value means `6h`.
 
 ---
 
@@ -329,7 +397,8 @@ forgesync/
     ├── output/            # text & JSON printers
     ├── shared/            # domain types (Issue, Project, Story, …)
     ├── status/            # read-only report behind `forgesync status`
-    └── sync/              # orchestration & sync rules
+    ├── sync/              # orchestration & sync rules
+    └── update/            # release lookup, update notice, self-update
 ```
 
 Dependencies only ever point downwards:
@@ -337,6 +406,7 @@ Dependencies only ever point downwards:
 ```
 cli → output → status → sync → github → shared
                   └──────────→ notion → shared
+cli → update
 ```
 
 The graph shows the main path. Two shortcuts sit alongside it: `status` also
@@ -351,6 +421,13 @@ change — neither one knows a sync exists. `internal/sync` owns every rule
 about *what* should happen (`ComputeStatus`, `IsSynced`, `IssueToStoryInput`)
 and drives the adapters through interfaces it declares itself. `internal/status`
 is a read-only sibling that reuses those rules to preview a run.
+
+`internal/update` imports none of our packages. It's the only package that
+imports `go-selfupdate`, the same rule the adapters follow for their SDKs, so
+`internal/cli` never sees a library type. The current version is passed in
+from `internal/cli`, and the pure parts (`IsNewer`, `ShouldCheck`,
+`ShouldNotify`, `IsGoInstall`) take every input as a parameter, the clock
+included.
 
 The one decision that could tempt an adapter upwards — "does this Story even
 need writing?" — lives in the engine, which checks `IsSynced` before calling
@@ -392,7 +469,11 @@ need writing?" — lives in the engine, which checks `IsSynced` before calling
   except a fatal error — not even `--verbose` debug output.
 - **Fatal errors are printed twice.** When a command aborts, the error appears
   on stderr twice — once prefixed with `Error:` and followed by the usage text,
-  and once plain — and the process exits with status 1.
+  and once plain — and the process exits with status 1. `update` is the
+  exception: it prints its error once.
+- **`go install` builds never get the update notice.** They report `version`
+  as `dev`, and `dev` builds skip the notice. `forgesync update` still points
+  them to the `go install …@latest` command.
 - **Time zones.** Dates are written as `YYYY-MM-DD HH:MM` in UTC (the timezone
   offset is dropped). Notion displays them in your local time zone, so a value
   can read a few hours — or a day — off from the GitHub timestamp.
@@ -413,6 +494,7 @@ need writing?" — lives in the engine, which checks `IsSynced` before calling
 - [x] Structured logging via `log/slog`
 - [x] Optional `--repo owner/name` flag to sync a single repo
 - [x] Break the `notion` → `utils` → `sync` dependency
+- [x] Update notice and `forgesync update` self-update
 - [ ] Configurable fetch window (currently a fixed 7 days)
 - [ ] Cache the Projects map between runs
 - [ ] Guard the Notion decoders against renamed or missing properties

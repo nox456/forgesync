@@ -27,81 +27,76 @@ var updateCmd = &cobra.Command{
 	Args:          cobra.NoArgs,
 	SilenceErrors: true,
 	SilenceUsage:  true,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if JSONOutput {
-			return errors.New("update does not support --json")
+	RunE:          runUpdate,
+}
+
+func runUpdate(cmd *cobra.Command, args []string) error {
+	if JSONOutput {
+		return errors.New("update does not support --json")
+	}
+
+	if VERSION == "dev" {
+		info, _ := debug.ReadBuildInfo()
+
+		if update.IsGoInstall(info) {
+			return fmt.Errorf("forgesync was installed with go install; update it with:\n  %s", update.GoInstallCommand)
 		}
 
-		if VERSION == "dev" {
-			info, _ := debug.ReadBuildInfo()
+		return errors.New("this is a development build; update by rebuilding from source")
+	}
 
-			if update.IsGoInstall(info) {
-				return errors.New("forgesync was installed with go install; update it with:\n\tgo install github.com/nox456/forgesync/cmd/forgesync@latest")
-			}
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
+	defer stop()
 
-			return errors.New("this is a development build; update by rebuilding from source")
+	u, err := update.NewUpdater(VERSION)
+	if err != nil {
+		return err
+	}
+
+	detectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	rel, err := u.Latest(detectCtx)
+	if err != nil {
+		if errors.Is(err, update.ErrNoRelease) {
+			return fmt.Errorf("no release is published for %s/%s", runtime.GOOS, runtime.GOARCH)
 		}
+		return err
+	}
 
-		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
-		defer stop()
+	out := cmd.OutOrStdout()
 
-		u, err := update.NewUpdater(VERSION)
-		if err != nil {
-			return err
-		}
-
-		contextWithTimeout, stop := context.WithTimeout(ctx, 15*time.Second)
-		defer stop()
-
-		rel, err := u.Latest(contextWithTimeout)
-		if err != nil {
-			if errors.Is(err, update.ErrNoRelease) {
-				return fmt.Errorf("no release is published for %s/%s", runtime.GOOS, runtime.GOARCH)
-			}
-			return err
-		}
-
-		if !update.IsNewer(VERSION, rel.Version) {
-			fmt.Printf("forgesync is already up to date (%s)\n", VERSION)
-			return nil
-		}
-
-		if !confirm(cmd.InOrStdin(), cmd.OutOrStdout(), fmt.Sprintf("Update forgesync %s → %s?", VERSION, rel.Version)) {
-			fmt.Println("Update Cancelled")
-			return nil
-		}
-
-		fmt.Printf("Downloading forgesync %s…\n", rel.Version)
-
-		err = u.Apply(ctx, rel)
-
-		if err != nil {
-			var perr *update.PermissionError
-
-			errors.As(err, &perr)
-
-			if perr != nil {
-				fmt.Printf("permission denied: cannot write to %s\n", perr.Dir)
-				if runtime.GOOS == "windows" {
-					fmt.Printf("Rerun from a terminal opened with \"Run as administrator\".\n")
-				} else {
-					fmt.Printf("Rerun with sudo: sudo forgesync update\n")
-				}
-
-				return err
-			}
-
-			if errors.Is(err, update.ErrRollbackFailed) {
-				fmt.Printf("Update failed and the previous binary could not be put back.\n")
-				return err
-			}
-
-			return err
-		}
-
-		fmt.Printf("Updated forgesync %s → %s\n", VERSION, rel.Version)
-		fmt.Printf("Release notes: %s\n", rel.URL)
-
+	if !update.IsNewer(VERSION, rel.Version) {
+		fmt.Fprintf(out, "forgesync is already up to date (%s)\n", VERSION)
 		return nil
-	},
+	}
+
+	if !confirm(cmd.InOrStdin(), out, fmt.Sprintf("Update forgesync %s → %s?", VERSION, rel.Version)) {
+		fmt.Fprintln(out, "Update cancelled.")
+		return nil
+	}
+
+	fmt.Fprintf(out, "Downloading forgesync %s…\n", rel.Version)
+
+	if err := u.Apply(ctx, rel); err != nil {
+		var perr *update.PermissionError
+		if errors.As(err, &perr) {
+			hint := "Rerun with sudo: sudo forgesync update"
+			if runtime.GOOS == "windows" {
+				hint = `Rerun from a terminal opened with "Run as administrator".`
+			}
+			return fmt.Errorf("permission denied: cannot write to %s\n%s", perr.Dir, hint)
+		}
+
+		if errors.Is(err, update.ErrRollbackFailed) {
+			return fmt.Errorf("%w\nReinstall forgesync with install.sh: https://github.com/nox456/forgesync#install", err)
+		}
+
+		return err
+	}
+
+	fmt.Fprintf(out, "Updated forgesync %s → %s\n", VERSION, rel.Version)
+	fmt.Fprintf(out, "Release notes: %s\n", rel.URL)
+
+	return nil
 }

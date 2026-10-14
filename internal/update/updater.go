@@ -43,7 +43,7 @@ func NewUpdater(current string) (*Updater, error) {
 }
 
 func (u *Updater) Latest(ctx context.Context) (*Release, error) {
-	latest, found, err := u.lib.DetectLatest(ctx, selfupdate.NewRepositorySlug("nox456", "forgesync"))
+	latest, found, err := u.lib.DetectLatest(ctx, repository)
 
 	if err != nil {
 		return nil, fmt.Errorf("detect latest release: %w", err)
@@ -69,8 +69,8 @@ func (u *Updater) LatestVersion(ctx context.Context) (string, error) {
 }
 
 func (u *Updater) Apply(ctx context.Context, r *Release) error {
-	if r.rel == nil {
-		return selfupdate.ErrInvalidRelease
+	if r == nil || r.rel == nil {
+		return fmt.Errorf("apply update: %w", selfupdate.ErrInvalidRelease)
 	}
 
 	exe, err := selfupdate.ExecutablePath()
@@ -81,8 +81,8 @@ func (u *Updater) Apply(ctx context.Context, r *Release) error {
 
 	err = u.lib.UpdateTo(ctx, r.rel, exe)
 
-	if err != nil {
-		return err
+	if err == nil {
+		return nil
 	}
 
 	if rerr := selfupdateapply.RollbackError(err); rerr != nil {
@@ -93,5 +93,5 @@ func (u *Updater) Apply(ctx context.Context, r *Release) error {
 		return &PermissionError{Dir: filepath.Dir(exe), Err: err}
 	}
 
-	return nil
+	return fmt.Errorf("apply update: %w", err)
 }
