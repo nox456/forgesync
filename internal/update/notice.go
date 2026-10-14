@@ -66,6 +66,10 @@ func ShouldNotify(cmd *cobra.Command, version string, stderrIsTerminal bool) boo
 }
 
 func StartUpdateNotice(cmd *cobra.Command, currentVersion string) {
+	if os.Getenv("SUDO_USER") != "" {
+		return
+	}
+
 	if !ShouldNotify(cmd, currentVersion, term.IsTerminal(int(os.Stderr.Fd()))) {
 		return
 	}

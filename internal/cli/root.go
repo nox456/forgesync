@@ -41,7 +41,9 @@ var rootCmd = &cobra.Command{
 			Printer = output.NewTextPrinter()
 		}
 
-		update.StartUpdateNotice(cmd, VERSION)
+		if cmd.Name() != "update" {
+			update.StartUpdateNotice(cmd, VERSION)
+		}
 
 		if !config.ShouldLoadConfig(cmd) {
 			return nil
