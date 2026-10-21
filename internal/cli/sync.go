@@ -17,11 +17,11 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Sync Notion stories with GitHub issuse (use --dry-run to see what would be changed without actually changing anything)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		engine := sync.NewEngine(NotionClient, GithubClient)
+		engine := sync.NewEngine(NotionClient, Providers)
 
 		report, err := engine.Run(cmd.Context(), sync.EngineRunOptions{
-			DryRun:     DryRun,
-			RepoFilter: RepoName,
+			DryRun: DryRun,
+			Repo:   RepoName,
 		})
 
 		if err != nil {

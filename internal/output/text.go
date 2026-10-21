@@ -22,9 +22,9 @@ func NewTextPrinter() *TextPrinter {
 
 func (p *TextPrinter) PrintProjects(projects []shared.Project) {
 	fmt.Println("==== Projects ====")
-	fmt.Fprintln(p.printer, "Name\tRepo")
+	fmt.Fprintln(p.printer, "Provider\tName\tScope")
 	for _, project := range projects {
-		fmt.Fprintf(p.printer, "%s\t%s\n", project.Name, project.Repo)
+		fmt.Fprintf(p.printer, "%s\t%s\t%s\n", project.Provider, project.Name, project.GetScope())
 	}
 
 	err := p.printer.Flush()
@@ -37,7 +37,7 @@ func (p *TextPrinter) PrintProjects(projects []shared.Project) {
 func (p *TextPrinter) PrintIssues(issues []shared.Issue) {
 	fmt.Println("==== Issues ====")
 
-	fmt.Fprintln(p.printer, "#\tRepo\tTitle\tState\tHas PR")
+	fmt.Fprintln(p.printer, "Provider\tIssue\tScope\tTitle\tState\tHas PR")
 
 	for _, issue := range issues {
 		var hasPR string
@@ -48,9 +48,10 @@ func (p *TextPrinter) PrintIssues(issues []shared.Issue) {
 			hasPR = ""
 		}
 
-		fmt.Fprintf(p.printer, "%d\t%s\t%s\t%s\t%s\n",
-			issue.Number,
-			issue.Repo,
+		fmt.Fprintf(p.printer, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			issue.Provider,
+			issue.Identifier,
+			issue.Scope,
 			issue.Title,
 			issue.State,
 			hasPR,
@@ -81,14 +82,19 @@ func (p *TextPrinter) PrintReport(report *sync.Report) {
 	if len(report.Errors) > 0 {
 		fmt.Println("\nErrors:")
 		for _, error := range report.Errors {
-			fmt.Printf("* forgesync#%d: %s\n", error.IssueNumber, error.Error)
+			switch {
+			case error.Identifier != "":
+				fmt.Printf("* %s %s: %s\n", error.Provider, error.Identifier, error.Error)
+			default:
+				fmt.Printf("* %s: %s\n", error.Project, error.Error)
+			}
 		}
 	}
 }
 
 func (p *TextPrinter) PrintStatus(rows []status.Row) {
 	fmt.Println("==== Status ====")
-	fmt.Fprintln(p.printer, "Project\tIssue\tTitle\tStatus\tHas PR\tIs Synced")
+	fmt.Fprintln(p.printer, "Provider\tProject\tIssue\tTitle\tStatus\tHas PR\tIs Synced")
 	for _, row := range rows {
 		var hasPR string
 		if row.HasPR {
@@ -104,18 +110,18 @@ func (p *TextPrinter) PrintStatus(rows []status.Row) {
 			isSynced = ""
 		}
 
-		var issueNumber string
+		var issueIdentifier string
 		var projectName string
 
 		if row.ProjectName != nil {
 			projectName = *row.ProjectName
-			issueNumber = fmt.Sprintf("%d", row.IssueNumber)
+			issueIdentifier = row.Identifier
 		} else {
 			projectName = "[NO PROJECT]"
-			issueNumber = fmt.Sprintf("%d (%s)", row.IssueNumber, row.IssueRepo)
+			issueIdentifier = fmt.Sprintf("%s (%s)", row.Identifier, row.IssueScope)
 		}
 
-		fmt.Fprintf(p.printer, "%s\t%s\t%s\t%s\t%s\t%s\n", projectName, issueNumber, row.IssueTitle, row.Status, hasPR, isSynced)
+		fmt.Fprintf(p.printer, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", row.Provider, projectName, issueIdentifier, row.IssueTitle, row.Status, hasPR, isSynced)
 	}
 
 	err := p.printer.Flush()

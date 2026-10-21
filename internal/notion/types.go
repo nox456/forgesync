@@ -24,10 +24,6 @@ type RichTextInput struct {
 	Text TextContent `json:"text"`
 }
 
-type NumberProperty struct {
-	Number int `json:"number"`
-}
-
 type URLProperty struct {
 	URL string `json:"url"`
 }
@@ -68,6 +64,10 @@ type TitleInputProperty struct {
 	Title []RichTextInput `json:"title"`
 }
 
+type RichTextInputProperty struct {
+	RichText []RichTextInput `json:"rich_text"`
+}
+
 type PageParent struct {
 	DataSourceID string `json:"data_source_id"`
 }
@@ -87,8 +87,10 @@ type ProjectsDataSourceResponse struct {
 		Object     string `json:"object"`
 		ID         string `json:"id"`
 		Properties struct {
-			Repo RichTextProperty `json:"repo"`
-			Name TitleProperty    `json:"name"`
+			Repo     RichTextProperty `json:"repo"`
+			TeamKey  RichTextProperty `json:"teamKey"`
+			Provider SelectProperty   `json:"provider"`
+			Name     TitleProperty    `json:"name"`
 		} `json:"properties"`
 	}
 	HasMore    bool   `json:"has_more"`
@@ -101,7 +103,7 @@ type StoriesDataSourceResponse struct {
 		Object     string `json:"object"`
 		ID         string `json:"id"`
 		Properties struct {
-			Issue        NumberProperty      `json:"Issue"`
+			Issue        RichTextProperty    `json:"Issue"`
 			CreatedTime  CreatedTimeProperty `json:"Created time"`
 			Labels       MultiSelectProperty `json:"Labels"`
 			LastWorkedAt DateProperty        `json:"Last Worked At"`
@@ -116,8 +118,12 @@ type StoriesDataSourceResponse struct {
 	NextCursor string `json:"next_cursor"`
 }
 
-type NumberFilter struct {
-	Equals int `json:"equals"`
+type RichTextFilter struct {
+	Equals string `json:"equals"`
+}
+
+type SelectFilter struct {
+	Equals string `json:"equals"`
 }
 
 type RelationFilter struct {
@@ -126,7 +132,8 @@ type RelationFilter struct {
 
 type PropertyFilter struct {
 	Property string          `json:"property"`
-	Number   *NumberFilter   `json:"number,omitempty"`
+	RichText *RichTextFilter `json:"rich_text,omitempty"`
+	Select   *SelectFilter   `json:"select,omitempty"`
 	Relation *RelationFilter `json:"relation,omitempty"`
 }
 
@@ -142,14 +149,14 @@ type StoryFilterPayload struct {
 }
 
 type StoryProperties struct {
-	Name         *TitleInputProperty  `json:"Name,omitempty"`
-	Project      *RelationProperty    `json:"Project,omitempty"`
-	Issue        *NumberProperty      `json:"Issue,omitempty"`
-	URL          *URLProperty         `json:"URL,omitempty"`
-	Status       *StatusProperty      `json:"Status,omitempty"`
-	Labels       *MultiSelectProperty `json:"Labels,omitempty"`
-	LastWorkedAt *DateProperty        `json:"Last Worked At,omitempty"`
-	FinishedDate *DateProperty        `json:"Finished Date,omitempty"`
+	Name         *TitleInputProperty    `json:"Name,omitempty"`
+	Project      *RelationProperty      `json:"Project,omitempty"`
+	Issue        *RichTextInputProperty `json:"Issue,omitempty"`
+	URL          *URLProperty           `json:"URL,omitempty"`
+	Status       *StatusProperty        `json:"Status,omitempty"`
+	Labels       *MultiSelectProperty   `json:"Labels,omitempty"`
+	LastWorkedAt *DateProperty          `json:"Last Worked At,omitempty"`
+	FinishedDate *DateProperty          `json:"Finished Date,omitempty"`
 }
 
 type StoryCreatePayload struct {

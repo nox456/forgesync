@@ -12,7 +12,7 @@ import (
 	"github.com/nox456/forgesync/internal/shared"
 )
 
-func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, issue shared.Issue, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error) {
+func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, isDryRun bool, existingStory *shared.Story) (*shared.UpsertResult, error) {
 	labels := make([]NamedOption, len(storyInput.Labels))
 	for i, l := range storyInput.Labels {
 		labels[i] = NamedOption{Name: l}
@@ -55,7 +55,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, 
 		createProps.Project = &RelationProperty{
 			Relation: []RelationRef{{ID: storyInput.Project}},
 		}
-		createProps.Issue = &NumberProperty{Number: issue.Number}
+		createProps.Issue = &RichTextInputProperty{RichText: []RichTextInput{{Text: TextContent{Content: storyInput.Issue}}}}
 		createProps.URL = &URLProperty{URL: storyInput.Url}
 
 		createPayload := &StoryCreatePayload{
@@ -86,7 +86,7 @@ func (c *Client) UpsertStory(ctx context.Context, storyInput shared.StoryInput, 
 			return nil, fmt.Errorf("notion api %d: %s", res.StatusCode, string(b))
 		}
 
-		slog.Debug("notion story created", "issue", createProps.Issue)
+		slog.Debug("notion story created", "issue", storyInput.Issue)
 
 		return &shared.UpsertResult{
 			Created: true,

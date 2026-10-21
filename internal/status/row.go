@@ -8,13 +8,14 @@ import (
 )
 
 type Row struct {
-	IssueNumber int
+	Identifier  string
 	IssueTitle  string
 	ProjectName *string
-	IssueRepo   string
+	IssueScope  string
 	Status      string
 	HasPR       bool
 	IsSynced    bool
+	Provider    shared.Provider
 }
 
 func BuildRow(issue shared.Issue, project *shared.Project, existingStory *shared.Story) Row {
@@ -34,12 +35,13 @@ func BuildRow(issue shared.Issue, project *shared.Project, existingStory *shared
 	}
 
 	return Row{
-		IssueNumber: issue.Number,
+		Identifier:  issue.Identifier,
 		IssueTitle:  issue.Title,
 		ProjectName: projectName,
-		IssueRepo:   issue.Repo,
+		IssueScope:  issue.Scope,
 		Status:      status,
 		HasPR:       issue.HasLinkedPR,
 		IsSynced:    isSynced,
+		Provider:    issue.Provider,
 	}
 }

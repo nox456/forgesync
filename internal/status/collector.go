@@ -6,59 +6,69 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/nox456/forgesync/internal/github"
-	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/shared"
+	"github.com/nox456/forgesync/internal/sync"
 )
 
-type Notion interface {
-	ListProjects(ctx context.Context, repoName string) ([]shared.Project, error)
-	FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error)
+type projectKey struct {
+	Provider shared.Provider
+	Scope    string
 }
 
-type Github interface {
-	FetchAssignedIssues(ctx context.Context, repoName string) ([]shared.Issue, error)
+type Notion interface {
+	ListProjects(ctx context.Context, filter shared.ProjectFilter) ([]shared.Project, error)
+	FindStoryByIssue(ctx context.Context, issue shared.Issue, projectId string) (*shared.Story, error)
 }
 
 type Collector struct {
 	NotionClient Notion
-	GithubClient Github
+	Providers    []sync.Provider
 }
 
-func NewCollector(notionClient *notion.Client, githubClient *github.Client) *Collector {
+func NewCollector(notionClient Notion, providers []sync.Provider) *Collector {
 	return &Collector{
 		NotionClient: notionClient,
-		GithubClient: githubClient,
+		Providers:    providers,
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context, repoName string) ([]Row, error) {
+func (c *Collector) Collect(ctx context.Context, filter shared.ProjectFilter) ([]Row, error) {
 	slog.Info("Fetching notion projects...")
-	projects, err := c.NotionClient.ListProjects(ctx, repoName)
+	projects, err := c.NotionClient.ListProjects(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	projectsMap := make(map[string]shared.Project)
+	projectsLookup := make(map[projectKey]shared.Project, len(projects))
 
 	for _, project := range projects {
-		projectsMap[strings.ToLower(project.Repo)] = project
+		projectsLookup[projectKey{project.Provider, strings.ToLower(project.GetScope())}] = project
 	}
 
 	slog.Info("Fetching github issues...")
-	issues, err := c.GithubClient.FetchAssignedIssues(ctx, repoName)
-	if err != nil {
-		return nil, err
+
+	var issues []shared.Issue
+
+	for _, p := range c.Providers {
+		f := filter.Repo
+		if p.Name() == shared.ProviderLinear {
+			f = filter.TeamKey
+		}
+		got, err := p.FetchAssignedIssues(ctx, f)
+		if err != nil {
+			return nil, err
+		}
+		issues = append(issues, got...)
 	}
 
 	rows := make([]Row, 0)
 
 	slog.Info("Building rows...")
 	for _, issue := range issues {
-		slog.Debug(fmt.Sprintf("[STATUS]: Building row - IssueNumber %d Repo %s", issue.Number, issue.Repo))
-		project, ok := projectsMap[strings.ToLower(issue.Repo)]
+		slog.Debug(fmt.Sprintf("[STATUS]: Building row - Issue %s Scope %s", issue.Identifier, issue.Scope))
+		project, ok := projectsLookup[projectKey{issue.Provider, strings.ToLower(issue.Scope)}]
 		if !ok {
-			slog.Debug(fmt.Sprintf("[STATUS]: Project not found - IssueNumber %d Repo %s", issue.Number, issue.Repo))
+			slog.Debug(fmt.Sprintf("[STATUS]: Project not found - Issue %s Scope %s", issue.Identifier, issue.Scope))
 			rows = append(rows, BuildRow(issue, nil, nil))
 			continue
 		}

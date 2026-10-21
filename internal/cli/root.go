@@ -10,6 +10,8 @@ import (
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/output"
+	"github.com/nox456/forgesync/internal/status"
+	"github.com/nox456/forgesync/internal/sync"
 	"github.com/nox456/forgesync/internal/update"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,14 @@ var GithubClient *github.Client
 var NotionClient *notion.Client
 var Verbose bool
 var RepoName string
+
+var (
+	_ sync.Provider = (*github.Client)(nil)
+	_ sync.Notion   = (*notion.Client)(nil)
+	_ status.Notion = (*notion.Client)(nil)
+)
+
+var Providers []sync.Provider
 
 var rootCmd = &cobra.Command{
 	Use:   "forgesync",
@@ -60,6 +70,9 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		Providers = append(Providers, GithubClient)
+
 		NotionClient = notion.NewClient(Config.NotionToken, Config.ProjectsSourceId, Config.StoriesSourceId)
 
 		return nil

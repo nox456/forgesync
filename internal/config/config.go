@@ -20,7 +20,7 @@ func Load() (*Config, error) {
 	viper.AutomaticEnv()
 
 	// Load config file
-	viper.SetConfigName("config")
+	viper.SetConfigName("config_test")
 	viper.AddConfigPath("$XDG_CONFIG_HOME/forgesync")
 
 	err := viper.ReadInConfig()

@@ -2,7 +2,7 @@ package github
 
 import "strings"
 
-func NormalizeGithubBody(input string) string {
+func normalizeGithubBody(input string) string {
 	lines := strings.Split(input, "\n")
 	var filteredLines []string
 

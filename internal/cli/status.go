@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/status"
 	"github.com/spf13/cobra"
 )
@@ -14,9 +15,9 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Compute status for a given issue",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		collector := status.NewCollector(NotionClient, GithubClient)
+		collector := status.NewCollector(NotionClient, Providers)
 
-		rows, err := collector.Collect(cmd.Context(), RepoName)
+		rows, err := collector.Collect(cmd.Context(), shared.ProjectFilter{Repo: RepoName})
 
 		if err != nil {
 			return err

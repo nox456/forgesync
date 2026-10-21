@@ -35,6 +35,13 @@ func parseNotionDate(raw string) (string, error) {
 	return "", fmt.Errorf("parse notion date %q", raw)
 }
 
+func getFirstRichText(richTextArray []RichTextItem) string {
+	if len(richTextArray) == 0 {
+		return ""
+	}
+	return richTextArray[0].PlainText
+}
+
 type Client struct {
 	Token            string
 	ProjectsSourceId string
@@ -102,7 +109,7 @@ func (c *Client) queryProjectsPage(ctx context.Context, cursor string) (*Project
 	return &data, nil
 }
 
-func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Project, error) {
+func (c *Client) ListProjects(ctx context.Context, filter shared.ProjectFilter) ([]shared.Project, error) {
 
 	var projects []shared.Project
 	cursor := ""
@@ -114,16 +121,43 @@ func (c *Client) ListProjects(ctx context.Context, repoName string) ([]shared.Pr
 		}
 
 		for _, result := range data.Results {
-			if repoName != "" && !strings.EqualFold(result.Properties.Repo.RichText[0].PlainText, repoName) {
+			resultProvider := result.Properties.Provider.Select.Name
+
+			var projectProvider shared.Provider
+
+			if strings.EqualFold(resultProvider, string(shared.ProviderGithub)) {
+				projectProvider = shared.ProviderGithub
+			} else if strings.EqualFold(resultProvider, string(shared.ProviderLinear)) {
+				projectProvider = shared.ProviderLinear
+			} else {
+				projectProvider = shared.Provider(resultProvider)
+			}
+
+			resultName := getFirstRichText(result.Properties.Name.Title)
+			resultRepo := getFirstRichText(result.Properties.Repo.RichText)
+			resultTeamKey := getFirstRichText(result.Properties.TeamKey.RichText)
+
+			project := shared.Project{
+				PageID:   result.ID,
+				Name:     resultName,
+				Repo:     resultRepo,
+				TeamKey:  resultTeamKey,
+				Provider: projectProvider,
+			}
+
+			if filter.Provider != "" && project.Provider != filter.Provider {
 				continue
 			}
 
-			project := shared.Project{
-				PageID: result.ID,
-				Name:   result.Properties.Name.Title[0].PlainText,
-				Repo:   result.Properties.Repo.RichText[0].PlainText,
+			if filter.Repo != "" && !strings.EqualFold(project.Repo, filter.Repo) {
+				continue
 			}
-			slog.Debug(fmt.Sprintf("[NOTION]: Project found - ID: %s Name: %s Repo: %s", project.PageID, project.Name, project.Repo))
+
+			if filter.TeamKey != "" && !strings.EqualFold(project.TeamKey, filter.TeamKey) {
+				continue
+			}
+
+			slog.Debug(fmt.Sprintf("[NOTION]: Project found - ID: %s Name: %s Provider: %s Scope: %s", project.PageID, project.Name, project.Provider, project.GetScope()))
 			projects = append(projects, project)
 		}
 
@@ -224,7 +258,7 @@ func (c *Client) ListStoriesByProject(ctx context.Context, projectId string) ([]
 			}
 
 			story.PageID = result.ID
-			story.Issue = fmt.Sprintf("%d", result.Properties.Issue.Number)
+			story.Issue = getFirstRichText(result.Properties.Issue.RichText)
 			story.CreatedAt = result.Properties.CreatedTime.Date
 			story.Labels = labels
 			story.LastWorkedAt = lastWorkedAt
@@ -232,7 +266,7 @@ func (c *Client) ListStoriesByProject(ctx context.Context, projectId string) ([]
 			story.Status = result.Properties.Status.Status.Name
 			story.Project = result.Properties.Project.Relation[0].ID
 			story.Url = result.Properties.URL.URL
-			story.Name = result.Properties.Name.Title[0].PlainText
+			story.Name = getFirstRichText(result.Properties.Name.Title)
 
 			stories = append(stories, story)
 		}
@@ -253,7 +287,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 		And: []PropertyFilter{
 			{
 				Property: "Issue",
-				Number:   &NumberFilter{Equals: issue.Number},
+				RichText: &RichTextFilter{Equals: issue.Identifier},
 			},
 			{
 				Property: "Project",
@@ -276,7 +310,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 	}
 
 	if len(data.Results) > 1 {
-		return nil, fmt.Errorf("found more than one story for issue %d", issue.Number)
+		return nil, fmt.Errorf("found more than one story for issue %s", issue.Identifier)
 	}
 
 	var story shared.Story
@@ -299,7 +333,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 		}
 
 		story.PageID = result.ID
-		story.Issue = fmt.Sprintf("%d", result.Properties.Issue.Number)
+		story.Issue = getFirstRichText(result.Properties.Issue.RichText)
 		story.CreatedAt = result.Properties.CreatedTime.Date
 		story.Labels = labels
 		story.LastWorkedAt = lastWorkedAt
@@ -307,7 +341,7 @@ func (c *Client) FindStoryByIssue(ctx context.Context, issue shared.Issue, proje
 		story.Status = result.Properties.Status.Status.Name
 		story.Project = result.Properties.Project.Relation[0].ID
 		story.Url = result.Properties.URL.URL
-		story.Name = result.Properties.Name.Title[0].PlainText
+		story.Name = getFirstRichText(result.Properties.Name.Title)
 	}
 
 	return &story, nil

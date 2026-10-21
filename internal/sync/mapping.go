@@ -1,9 +1,6 @@
 package sync
 
 import (
-	"fmt"
-
-	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/shared"
 )
 
@@ -26,9 +23,9 @@ func IssueToStoryInput(issue shared.Issue, existingStory *shared.Story, projectP
 	return shared.StoryInput{
 		Name:         issue.Title,
 		Project:      projectPageId,
-		Issue:        fmt.Sprintf("%d", issue.Number),
+		Issue:        issue.Identifier,
 		Url:          issue.URL,
-		Body:         github.NormalizeGithubBody(issue.Body),
+		Body:         issue.Body,
 		Status:       ComputeStatus(issue, previousStatus),
 		Labels:       issue.Labels,
 		LastWorkedAt: issue.UpdatedAt.Format(storyDateLayout),

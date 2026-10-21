@@ -13,33 +13,43 @@ import (
 type JSONPrinter struct{}
 
 type Project struct {
-	Name string `json:"name"`
-	Repo string `json:"repo"`
+	Name     string `json:"name"`
+	Scope    string `json:"scope"`
+	Provider string `json:"provider"`
 }
 
 type Issue struct {
-	Number      int    `json:"number"`
-	Repo        string `json:"repo"`
+	Identifier  string `json:"identifier"`
+	Scope       string `json:"scope"`
 	Title       string `json:"title"`
 	HasLinkedPR bool   `json:"has_linked_pr"`
+	Provider    string `json:"provider"`
+}
+
+type Error struct {
+	Provider   string `json:"provider,omitempty"`
+	Project    string `json:"project,omitempty"`
+	Identifier string `json:"identifier,omitempty"`
+	Message    string `json:"message"`
 }
 
 type Report struct {
-	Created   int      `json:"created"`
-	Updated   int      `json:"updated"`
-	Skipped   int      `json:"skipped"`
-	Unchanged int      `json:"unchanged"`
-	Errors    []string `json:"errors"`
+	Created   int     `json:"created"`
+	Updated   int     `json:"updated"`
+	Skipped   int     `json:"skipped"`
+	Unchanged int     `json:"unchanged"`
+	Errors    []Error `json:"errors"`
 }
 
 type StatusRow struct {
-	IssueNumber int     `json:"issue_number"`
-	IssueTitle  string  `json:"issue_title"`
-	ProjectName *string `json:"project_name"`
-	IssueRepo   string  `json:"issue_repo"`
-	Status      string  `json:"status"`
-	HasPR       bool    `json:"has_pr"`
-	IsSynced    bool    `json:"is_synced"`
+	IssueIdentifier string  `json:"identifier"`
+	IssueTitle      string  `json:"issue_title"`
+	ProjectName     *string `json:"project_name"`
+	IssueScope      string  `json:"scope"`
+	Status          string  `json:"status"`
+	HasPR           bool    `json:"has_pr"`
+	IsSynced        bool    `json:"is_synced"`
+	Provider        string  `json:"provider"`
 }
 
 func NewJSONPrinter() *JSONPrinter {
@@ -51,8 +61,9 @@ func (p *JSONPrinter) PrintProjects(projects []shared.Project) {
 
 	for i, project := range projects {
 		parsedProjects[i] = Project{
-			Name: project.Name,
-			Repo: project.Repo,
+			Name:     project.Name,
+			Scope:    project.GetScope(),
+			Provider: string(project.Provider),
 		}
 	}
 
@@ -72,10 +83,11 @@ func (p *JSONPrinter) PrintIssues(issues []shared.Issue) {
 
 	for i, issue := range issues {
 		parsedIssues[i] = Issue{
-			Number:      issue.Number,
-			Repo:        issue.Repo,
+			Identifier:  issue.Identifier,
+			Scope:       issue.Scope,
 			Title:       issue.Title,
 			HasLinkedPR: issue.HasLinkedPR,
+			Provider:    string(issue.Provider),
 		}
 	}
 
@@ -91,10 +103,15 @@ func (p *JSONPrinter) PrintIssues(issues []shared.Issue) {
 }
 
 func (p *JSONPrinter) PrintReport(report *sync.Report) {
-	var errors []string
+	errors := make([]Error, 0, len(report.Errors))
 
 	for _, error := range report.Errors {
-		errors = append(errors, error.Error)
+		errors = append(errors, Error{
+			Provider:   string(error.Provider),
+			Project:    error.Project,
+			Identifier: error.Identifier,
+			Message:    error.Error,
+		})
 	}
 
 	parsedReport := Report{
@@ -121,13 +138,14 @@ func (p *JSONPrinter) PrintStatus(rows []status.Row) {
 
 	for i, row := range rows {
 		parsedRows[i] = StatusRow{
-			IssueNumber: row.IssueNumber,
-			IssueTitle:  row.IssueTitle,
-			Status:      row.Status,
-			IssueRepo:   row.IssueRepo,
-			ProjectName: row.ProjectName,
-			HasPR:       row.HasPR,
-			IsSynced:    row.IsSynced,
+			IssueIdentifier: row.Identifier,
+			IssueTitle:      row.IssueTitle,
+			Status:          row.Status,
+			IssueScope:      row.IssueScope,
+			ProjectName:     row.ProjectName,
+			HasPR:           row.HasPR,
+			IsSynced:        row.IsSynced,
+			Provider:        string(row.Provider),
 		}
 	}
 

@@ -73,19 +73,20 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, repoName string) ([]sh
 		}
 
 		issue := shared.Issue{
-			Number:      *issueResponse.Number,
+			Identifier:  fmt.Sprintf("#%d", *issueResponse.Number),
 			Title:       *issueResponse.Title,
 			URL:         *issueResponse.HTMLURL,
-			Body:        issueResponse.GetBody(),
+			Body:        normalizeGithubBody(issueResponse.GetBody()),
 			State:       *issueResponse.State,
 			Labels:      issueLabels,
-			Repo:        fmt.Sprintf("%s/%s", owner, repo),
+			Scope:       fmt.Sprintf("%s/%s", owner, repo),
+			Provider:    shared.ProviderGithub,
 			UpdatedAt:   (*issueResponse.UpdatedAt).Time,
 			CreatedAt:   (*issueResponse.CreatedAt).Time,
 			ClosedAt:    closedAt,
 			HasLinkedPR: hasLinkedPR,
 		}
-		slog.Debug(fmt.Sprintf("[GITHUB]: Issue found - Number: %d Title: %s Repo: %s", issue.Number, issue.Title, issue.Repo))
+		slog.Debug(fmt.Sprintf("[GITHUB]: Issue found - Identifier: %s Title: %s Scope: %s", issue.Identifier, issue.Title, issue.Scope))
 		issues = append(issues, issue)
 	}
 
@@ -150,4 +151,8 @@ func (c *Client) hasLinkedPR(ctx context.Context, owner, repo string, number int
 	}
 
 	return false, nil
+}
+
+func (c *Client) Name() shared.Provider {
+	return shared.ProviderGithub
 }
