@@ -16,78 +16,96 @@ func TestComputeStatus(t *testing.T) {
 	}{
 		{
 			name:  "open without linked PR and no previous status defaults to not started",
-			issue: shared.Issue{State: "open", HasLinkedPR: false},
+			issue: shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: false},
 			want:  "Not started",
 		},
 		{
 			name:           "open without linked PR and previous not started stays not started",
-			issue:          shared.Issue{State: "open", HasLinkedPR: false},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: false},
 			previousStatus: "Not started",
 			want:           "Not started",
 		},
 		{
 			name:  "open with linked PR and no previous status is in PR",
-			issue: shared.Issue{State: "open", HasLinkedPR: true},
+			issue: shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: true},
 			want:  "In PR",
 		},
 		{
 			name:           "open with linked PR and previous not started is in PR",
-			issue:          shared.Issue{State: "open", HasLinkedPR: true},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: true},
 			previousStatus: "Not started",
 			want:           "In PR",
 		},
 		{
 			name:           "open without linked PR preserves a previous manual status",
-			issue:          shared.Issue{State: "open", HasLinkedPR: false},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: false},
 			previousStatus: "In progress",
 			want:           "In progress",
 		},
 		{
 			name:           "open preserves a previously done status",
-			issue:          shared.Issue{State: "open", HasLinkedPR: true},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: true},
 			previousStatus: "Done",
 			want:           "Done",
 		},
 		{
 			name:           "open preserves a previously cancelled status",
-			issue:          shared.Issue{State: "open", HasLinkedPR: false},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "open", HasLinkedPR: false},
 			previousStatus: "Cancelled",
 			want:           "Cancelled",
 		},
 		{
 			name:           "closed from not started becomes done",
-			issue:          shared.Issue{State: "closed", HasLinkedPR: false},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "closed", HasLinkedPR: false},
 			previousStatus: "Not started",
 			want:           "Done",
 		},
 		{
 			name:           "closed from in progress becomes done",
-			issue:          shared.Issue{State: "closed", HasLinkedPR: true},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "closed", HasLinkedPR: true},
 			previousStatus: "In progress",
 			want:           "Done",
 		},
 		{
 			name:           "closed preserves a previously done status",
-			issue:          shared.Issue{State: "closed", HasLinkedPR: true},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "closed", HasLinkedPR: true},
 			previousStatus: "Done",
 			want:           "Done",
 		},
 		{
 			name:           "closed preserves a previously cancelled status",
-			issue:          shared.Issue{State: "closed", HasLinkedPR: false},
+			issue:          shared.Issue{Provider: shared.ProviderGithub, State: "closed", HasLinkedPR: false},
 			previousStatus: "Cancelled",
 			want:           "Cancelled",
 		},
 		{
 			name:  "closed with no previous status becomes done",
-			issue: shared.Issue{State: "closed", HasLinkedPR: false},
+			issue: shared.Issue{Provider: shared.ProviderGithub, State: "closed", HasLinkedPR: false},
 			want:  "Done",
 		},
 		{
 			name:  "unknown state falls back to not started",
-			issue: shared.Issue{State: "", HasLinkedPR: true},
+			issue: shared.Issue{Provider: shared.ProviderGithub, State: "", HasLinkedPR: true},
 			want:  "Not started",
 		},
+		{
+			name:           "an unset provider falls back to not started even when open with a PR",
+			issue:          shared.Issue{State: "open", HasLinkedPR: true},
+			previousStatus: "In progress",
+			want:           "Not started",
+		},
+		{
+			name:           "an unset provider falls back to not started even when closed",
+			issue:          shared.Issue{State: "closed"},
+			previousStatus: "In progress",
+			want:           "Not started",
+		},
+		{
+			name:  "an unknown provider falls back to not started",
+			issue: shared.Issue{Provider: "gitlab", State: "closed", HasLinkedPR: true},
+			want:  "Not started",
+		},
+		// error path: none — ComputeStatus is total; every input maps to a status.
 	}
 
 	for _, tc := range cases {

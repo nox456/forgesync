@@ -7,7 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/nox456/forgesync/internal/shared"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -15,7 +19,7 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
 // storyPage renders one page of a Notion data-source query holding a single
-// story per issue number.
+// story per issue number, with Issue stored as rich text ("#N").
 func storyPage(issueNumbers []int, nextCursor string) string {
 	results := make([]string, 0, len(issueNumbers))
 
@@ -24,7 +28,7 @@ func storyPage(issueNumbers []int, nextCursor string) string {
 			"object": "page",
 			"id": "story-%d",
 			"properties": {
-				"Issue": {"number": %d},
+				"Issue": {"rich_text": [{"plain_text": "#%d"}]},
 				"Created time": {"created_time": "2026-08-01T09:00:00.000+00:00"},
 				"Labels": {"multi_select": [{"name": "bug"}]},
 				"Last Worked At": {"date": {"start": "2026-08-02T10:30:00.000+00:00"}},
@@ -102,7 +106,7 @@ func TestListStoriesByProjectFollowsPagination(t *testing.T) {
 		t.Fatalf("got %d stories, want 5 across %d pages", len(stories), len(pages))
 	}
 
-	for i, want := range []string{"1", "2", "3", "4", "5"} {
+	for i, want := range []string{"#1", "#2", "#3", "#4", "#5"} {
 		if stories[i].Issue != want {
 			t.Errorf("stories[%d].Issue = %q, want %q", i, stories[i].Issue, want)
 		}
@@ -155,4 +159,169 @@ func TestListStoriesByProjectStopsOnMissingCursor(t *testing.T) {
 	if requests != 1 {
 		t.Errorf("made %d requests, want 1", requests)
 	}
+}
+
+// jsonResponse returns a response with the given status code and body.
+func jsonResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(bytes.NewBufferString(body)),
+		Header:     make(http.Header),
+	}
+}
+
+// storiesClient returns a client whose every request is answered by respond,
+// after recording the decoded query payload.
+func storiesClient(t *testing.T, respond func(payload StoryFilterPayload) *http.Response) *Client {
+	t.Helper()
+	return &Client{
+		Token:           "token",
+		StoriesSourceId: "stories",
+		HTTP: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					return nil, err
+				}
+				var payload StoryFilterPayload
+				if err := json.Unmarshal(body, &payload); err != nil {
+					return nil, err
+				}
+				return respond(payload), nil
+			}),
+		},
+	}
+}
+
+// A story whose Issue cell was left empty comes back as "rich_text": [].
+// Reading it must yield "" rather than panicking on the [0] index.
+func TestListStoriesByProjectReadsEmptyIssueAsEmptyString(t *testing.T) {
+	page := `{"object":"list","has_more":false,"next_cursor":"","results":[{
+		"object": "page",
+		"id": "story-empty",
+		"properties": {
+			"Issue": {"rich_text": []},
+			"Project": {"relation": [{"id": "p1"}]},
+			"Name": {"title": []}
+		}
+	}]}`
+	client := storiesClient(t, func(StoryFilterPayload) *http.Response { return jsonResponse(200, page) })
+
+	stories, err := client.ListStoriesByProject(context.Background(), "p1")
+	if err != nil {
+		t.Fatalf("ListStoriesByProject() unexpected error: %v", err)
+	}
+
+	if len(stories) != 1 {
+		t.Fatalf("got %d stories, want 1", len(stories))
+	}
+	if stories[0].Issue != "" {
+		t.Errorf("stories[0].Issue = %q, want empty", stories[0].Issue)
+	}
+	if stories[0].Name != "" {
+		t.Errorf("stories[0].Name = %q, want empty", stories[0].Name)
+	}
+}
+
+func TestListStoriesByProjectReturnsAPIError(t *testing.T) {
+	client := storiesClient(t, func(StoryFilterPayload) *http.Response {
+		return jsonResponse(500, `{"message":"internal"}`)
+	})
+
+	stories, err := client.ListStoriesByProject(context.Background(), "p1")
+	if err == nil {
+		t.Fatalf("ListStoriesByProject() = %+v, want an error", stories)
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error = %q, want it to mention the status code 500", err)
+	}
+}
+
+func TestFindStoryByIssue(t *testing.T) {
+	issue := shared.Issue{Provider: shared.ProviderGithub, Identifier: "#12", Scope: "owner/repo"}
+
+	t.Run("happy path", func(t *testing.T) {
+		t.Run("filters on the identifier as rich text and the project relation", func(t *testing.T) {
+			var got StoryFilterPayload
+			client := storiesClient(t, func(payload StoryFilterPayload) *http.Response {
+				got = payload
+				return jsonResponse(200, storyPage([]int{12}, ""))
+			})
+
+			if _, err := client.FindStoryByIssue(context.Background(), issue, "p1"); err != nil {
+				t.Fatalf("FindStoryByIssue() unexpected error: %v", err)
+			}
+
+			want := FilterCondition{And: []PropertyFilter{
+				{Property: "Issue", RichText: &RichTextFilter{Equals: "#12"}},
+				{Property: "Project", Relation: &RelationFilter{Contains: "p1"}},
+			}}
+			if diff := cmp.Diff(want, got.Filter); diff != "" {
+				t.Errorf("query filter mismatch (-want +got):\n%s", diff)
+			}
+		})
+
+		t.Run("one match is decoded with its rich-text identifier", func(t *testing.T) {
+			client := storiesClient(t, func(StoryFilterPayload) *http.Response {
+				return jsonResponse(200, storyPage([]int{12}, ""))
+			})
+
+			story, err := client.FindStoryByIssue(context.Background(), issue, "p1")
+			if err != nil {
+				t.Fatalf("FindStoryByIssue() unexpected error: %v", err)
+			}
+			if story == nil {
+				t.Fatalf("FindStoryByIssue() = nil, want a story")
+			}
+			if story.Issue != "#12" {
+				t.Errorf("story.Issue = %q, want %q", story.Issue, "#12")
+			}
+			if story.PageID != "story-12" {
+				t.Errorf("story.PageID = %q, want %q", story.PageID, "story-12")
+			}
+		})
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		t.Run("no match returns nil without an error", func(t *testing.T) {
+			client := storiesClient(t, func(StoryFilterPayload) *http.Response {
+				return jsonResponse(200, storyPage(nil, ""))
+			})
+
+			story, err := client.FindStoryByIssue(context.Background(), issue, "p1")
+			if err != nil {
+				t.Fatalf("FindStoryByIssue() unexpected error: %v", err)
+			}
+			if story != nil {
+				t.Errorf("FindStoryByIssue() = %+v, want nil", story)
+			}
+		})
+	})
+
+	t.Run("error path", func(t *testing.T) {
+		t.Run("more than one match is an error naming the identifier", func(t *testing.T) {
+			client := storiesClient(t, func(StoryFilterPayload) *http.Response {
+				return jsonResponse(200, storyPage([]int{12, 12}, ""))
+			})
+
+			story, err := client.FindStoryByIssue(context.Background(), issue, "p1")
+			if err == nil {
+				t.Fatalf("FindStoryByIssue() = %+v, want an error", story)
+			}
+			if !strings.Contains(err.Error(), "#12") {
+				t.Errorf("error = %q, want it to name %q", err, "#12")
+			}
+		})
+
+		t.Run("an API error is returned", func(t *testing.T) {
+			client := storiesClient(t, func(StoryFilterPayload) *http.Response {
+				return jsonResponse(400, `{"message":"bad filter"}`)
+			})
+
+			story, err := client.FindStoryByIssue(context.Background(), issue, "p1")
+			if err == nil {
+				t.Fatalf("FindStoryByIssue() = %+v, want an error", story)
+			}
+		})
+	})
 }

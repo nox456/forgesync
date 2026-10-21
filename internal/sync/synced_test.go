@@ -11,11 +11,12 @@ func TestIsSynced(t *testing.T) {
 	updatedAt := time.Date(2026, 5, 20, 10, 30, 0, 0, time.UTC)
 
 	issue := shared.Issue{
-		Number:    42,
-		Title:     "Add login flow",
-		State:     "open",
-		Labels:    []string{"feature", "backend"},
-		UpdatedAt: updatedAt,
+		Provider:   shared.ProviderGithub,
+		Identifier: "#42",
+		Title:      "Add login flow",
+		State:      "open",
+		Labels:     []string{"feature", "backend"},
+		UpdatedAt:  updatedAt,
 	}
 
 	// storyWith returns the Story an in-sync issue would have, with a single
@@ -83,13 +84,13 @@ func TestIsSynced(t *testing.T) {
 		},
 		{
 			name:  "a status the rules would promote is out of sync",
-			issue: shared.Issue{Title: issue.Title, State: "open", HasLinkedPR: true, Labels: issue.Labels, UpdatedAt: updatedAt},
+			issue: shared.Issue{Provider: shared.ProviderGithub, Title: issue.Title, State: "open", HasLinkedPR: true, Labels: issue.Labels, UpdatedAt: updatedAt},
 			story: storyWith(func(s *shared.Story) { s.Status = "In progress" }),
 			want:  false,
 		},
 		{
 			name:  "a closed issue whose story is still not started is out of sync",
-			issue: shared.Issue{Title: issue.Title, State: "closed", Labels: issue.Labels, UpdatedAt: updatedAt},
+			issue: shared.Issue{Provider: shared.ProviderGithub, Title: issue.Title, State: "closed", Labels: issue.Labels, UpdatedAt: updatedAt},
 			story: storyWith(nil),
 			want:  false,
 		},
