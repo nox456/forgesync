@@ -1,39 +1,37 @@
 # forgesync
 
-A small Go CLI that syncs GitHub issues assigned to you into your Notion
-workspace, linking each issue to the matching Project in your Project Manager
-database.
+A small Go CLI that syncs the GitHub issues assigned to you into Notion. Each
+issue becomes a Story in your Stories database, linked to the matching Project
+in your Project Manager database.
 
 One-way sync (GitHub → Notion), run on demand. No daemon, no webhooks.
 
 ---
 
-## What it does
+## How it works
 
 For every issue assigned to you on GitHub (updated in the last 7 days, pull
-requests excluded), `forgesync` will:
+requests excluded), `forgesync sync`:
 
-1. Look up the issue's repo (`owner/name`) in your **Project Manager** database
-   via the `repo` text field.
-2. If a matching Project exists, upsert a row in the **Stories** database
-   linked to that Project. If no Project matches, the issue is skipped.
-3. Keep the Story's `Name`, `Labels`, `Last Worked At`, and `Finished Date` in
-   sync with the GitHub issue, mirror the issue body into the Story's page
-   content, and compute its `Status` from the issue state
-   (see [Status mapping](#status-mapping)). The `URL`, `Issue` number, and
-   `Project` relation are set once, when the Story is first created.
+1. Looks up the issue's repo (`owner/name`) in your **Project Manager**
+   database through its `repo` field. If no Project matches, the issue is
+   skipped.
+2. Creates or updates the issue's Story in your **Stories** database, linked
+   to that Project.
+3. Keeps the Story's `Name`, `Labels`, `Last Worked At`, and `Finished Date` in
+   sync with the issue, mirrors the issue body into the Story's page content,
+   and computes its `Status` (see [Status mapping](#status-mapping)). The
+   `URL`, `Issue` number, and `Project` relation are set once, when the Story
+   is created.
 
-The sync key is the pair **(Project, issue number)**: `forgesync` looks up an
-existing Story that is linked to the issue's Project *and* carries a matching
-`Issue` number, updates it, and otherwise creates one. Running `forgesync sync`
-repeatedly is safe and idempotent. A Story whose `Name`, `Status`, `Labels`,
-and `Last Worked At` already match is reported as `Unchanged` and left
-untouched.
+A Story is identified by its **(Project, issue number)** pair, so running
+`forgesync sync` again is always safe: existing Stories are updated, missing
+ones are created, and a Story whose `Name`, `Status`, `Labels`, and
+`Last Worked At` already match is reported as `Unchanged` and left alone.
 
 ### Status mapping
 
-When a Story is **first created**, its `Status` is derived purely from the
-GitHub issue:
+A new Story gets its `Status` from the GitHub issue alone:
 
 | GitHub issue state | Linked PR? | Notion `Status` |
 | ------------------ | ---------- | --------------- |
@@ -41,53 +39,42 @@ GitHub issue:
 | Open               | yes        | `In PR`         |
 | Closed             | any        | `Done`          |
 
-Any other/unknown state falls back to `Not started`.
+On later syncs the Story's current status is taken into account, so most
+manual edits you make in Notion survive:
 
-Linked-PR detection only runs on **open** issues, so a closed issue lands on
-`Done` regardless of the PRs attached to it.
-
-On later syncs the **previous Notion status is folded in**, so most manual
-edits survive instead of being overwritten:
-
-- An **open** issue with no status yet (or still `Not started`) lets GitHub
-  decide: a linked PR makes it `In PR`, otherwise it stays `Not started`.
-- An **open** issue you set to `In progress` is promoted to `In PR` as soon as
-  a PR is linked. This is the one case where GitHub overrides a status you set
-  by hand.
-- Any other manual status on an **open** issue is preserved — `Done`,
-  `Cancelled`, `In PR`, or an `In progress` with no PR linked yet.
-- A **closed** issue you previously set to `Cancelled` stays `Cancelled`.
-- Any other closed issue becomes `Done`.
+- **Open issue, no status or `Not started`:** GitHub decides — `In PR` with a
+  linked PR, `Not started` without one.
+- **Open issue, `In progress`:** promoted to `In PR` as soon as a PR is linked.
+  This is the only case where GitHub overrides a status you set by hand.
+- **Open issue, any other status** (`Done`, `Cancelled`, `In PR`): kept.
+- **Closed issue:** becomes `Done`, unless you set it to `Cancelled`.
 
 `forgesync` never writes `In progress` itself. You set it in Notion to mark
-that you have started work, and the sync promotes it to `In PR` when a PR
-appears — so the option still has to exist in your database.
+that you've started work, and the sync promotes it to `In PR` when a PR
+appears.
 
-Linked-PR detection asks GitHub's GraphQL API for the issue's
-`closedByPullRequestsReferences` — the PRs linked to it with a closing keyword
-(`Fixes #12`) or through the Development sidebar. The issue counts as having a
-linked PR when at least one of them is **not a draft**. Closed-but-unmerged PRs
-are included in that list, so they count too.
+### What it never changes
 
-### What it does NOT touch
-
-- The `URL`, `Issue`, and `Project` relation after the Story is created
-- Any property not listed above (e.g. `Prioridad` — you own this in Notion)
-- The `Created time` property (auto-managed by Notion)
-- `Finished Date` while the issue is still open (when the issue is closed, it is
-  set from `closed_at`)
+- `URL`, `Issue`, and `Project` after the Story is created
+- `Finished Date` while the issue is open (it's set from `closed_at` once the
+  issue closes)
+- `Created time`, which Notion manages, and any property not listed above
+  (e.g. `Prioridad` — you own it in Notion)
 
 ---
 
 ## Requirements
 
-- Go 1.26 or later
-- A GitHub personal access token with `repo` scope (classic) or the equivalent
-  fine-grained permissions (`Issues: read`, `Pull requests: read`,
-  `Metadata: read` on the repos you care about)
-- A Notion internal integration token with access to the Project Manager and
-  Stories databases. Create one at
-  <https://www.notion.so/profile/integrations> and share both databases with it.
+- A GitHub personal access token: classic with the `repo` scope, or
+  fine-grained with `Issues: read`, `Pull requests: read`, and
+  `Metadata: read` on the repos you care about.
+- A Notion internal integration token, created at
+  <https://www.notion.so/profile/integrations>, with your Project Manager and
+  Stories databases shared with it.
+- Both databases set up with the properties `forgesync` expects — see
+  [Notion setup](docs/NOTION_SETUP.md).
+- Go 1.26.3 or later, only if you install with `go install` or build from
+  source.
 
 ---
 
@@ -112,31 +99,25 @@ curl -fsSL https://github.com/nox456/forgesync/releases/latest/download/install.
 
 > **Caveats**
 >
-> - **Linux and macOS only.** The script resolves `linux`/`darwin` and
->   `amd64`/`arm64`. On Windows, use `go install` or download the `.zip` from the
+> - **Linux and macOS only** (`amd64` and `arm64`). On Windows, use
+>   `go install` or download the `.zip` from the
 >   [releases page](https://github.com/nox456/forgesync/releases).
-> - **It pipes remote code into your shell.** Convenient, but it runs unreviewed.
->   To inspect before running, download it first:
+> - **It pipes remote code into your shell.** To read the script before
+>   running it:
 >   ```sh
 >   curl -fsSL -o install.sh \
 >     https://github.com/nox456/forgesync/releases/latest/download/install.sh
 >   less install.sh   # read it
 >   sh install.sh     # then run it
 >   ```
-> - **`sudo` may be requested.** The default install directory is
->   `/usr/local/bin`; if it isn't writable, the script falls back to `sudo`. Set
->   `FORGESYNC_INSTALL_DIR` to a writable path (e.g. `~/.local/bin`) to avoid
->   that — just make sure it's on your `PATH`.
-> - **`FORGESYNC_VERSION` controls the binary, not the script URL.** Pinning the
->   *script* URL to a tag does not pin the *binary*; set the env var for a
->   specific version. The default is the latest release.
-> - **Needs `curl` (or `wget`) and `tar`.** Checksum verification additionally
->   uses `sha256sum` or `shasum`; if neither is found, verification is skipped
->   with a warning rather than failing.
-> - **A system-wide install updates with `sudo`.** `forgesync update` replaces
->   the binary in place, so with the default `/usr/local/bin` it needs
->   `sudo forgesync update` (see [Update forgesync](#update-forgesync)). Installing
->   to `~/.local/bin` avoids that.
+> - **It may ask for `sudo`.** The default install directory, `/usr/local/bin`,
+>   is usually not writable. Set `FORGESYNC_INSTALL_DIR` to a writable
+>   directory on your `PATH` (e.g. `~/.local/bin`) to avoid it — which also
+>   spares you `sudo` on every [update](#update-forgesync).
+> - **`FORGESYNC_VERSION` pins the binary.** Pinning the script URL to a tag
+>   does not; the default is the latest release.
+> - **Needs `curl` (or `wget`) and `tar`.** The checksum check uses
+>   `sha256sum` or `shasum`, and is skipped with a warning if neither is found.
 
 ### With Go
 
@@ -144,10 +125,9 @@ curl -fsSL https://github.com/nox456/forgesync/releases/latest/download/install.
 go install github.com/nox456/forgesync/cmd/forgesync@latest
 ```
 
-Replace `@latest` with a tag (e.g. `@v0.1.0`) to pin a version. This compiles
-from source, so the resulting binary depends on your local Go toolchain.
-`forgesync update` doesn't replace a binary installed this way. It prints this
-same `go install` command instead.
+Replace `@latest` with a tag (e.g. `@v0.1.0`) to pin a version.
+`forgesync update` can't replace a binary installed this way, so rerun this
+command to update.
 
 ### From source
 
@@ -161,17 +141,14 @@ go build -o forgesync ./cmd/forgesync
 
 ## Configuration
 
-`forgesync` reads configuration from a YAML file at
+`forgesync` reads its configuration from
 `$XDG_CONFIG_HOME/forgesync/config.yaml` (commonly
 `~/.config/forgesync/config.yaml`, provided `XDG_CONFIG_HOME` is set).
 Environment variables prefixed with `FORGESYNC_` override the file's values.
 
-> **Note:** a config file must exist, and every required value must be set,
-> before any command runs except `version` and `update`, which never read it.
-> `config` included, every other command errors out if it can't find the file,
-> even when every value is also provided through environment variables.
-
-### Required values
+> **Note:** every command except `version` and `update` needs the file to
+> exist, even when every value comes from environment variables, and errors
+> out if a required value is missing.
 
 | Key                  | Env var                         | Description                                       |
 | -------------------- | ------------------------------- | ------------------------------------------------- |
@@ -180,18 +157,18 @@ Environment variables prefixed with `FORGESYNC_` override the file's values.
 | `projects_source_id` | `FORGESYNC_PROJECTS_SOURCE_ID`  | Data source ID of the Project Manager database    |
 | `stories_source_id`  | `FORGESYNC_STORIES_SOURCE_ID`   | Data source ID of the Stories database            |
 
-### Example `config.yaml`
+All four are required.
 
 ```yaml
+# ~/.config/forgesync/config.yaml
 github_token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 notion_token: ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 projects_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 stories_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
-### Overriding with environment variables
-
 ```sh
+# Overriding with environment variables
 export FORGESYNC_GITHUB_TOKEN=ghp_...
 export FORGESYNC_NOTION_TOKEN=ntn_...
 export FORGESYNC_PROJECTS_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -209,8 +186,7 @@ export FORGESYNC_STORIES_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 | `--json`    | Print output as JSON. Also discards all logs, `--verbose` included. `update` rejects it |
 | `--verbose` | Enable debug-level logging on stderr (no effect with `--json`)     |
 
-`--repo owner/name` is **not** global: only `sync` and `status` accept it. See
-those sections below.
+`--repo owner/name` is **not** global: only `sync` and `status` accept it.
 
 ### Sanity check — list Projects
 
@@ -230,11 +206,10 @@ forgesync issues
 
 ### Status report — what the sync would compute
 
-Reads from both APIs, writes nothing. Prints one row per assigned issue: the
-matching Project (or `[NO PROJECT]` when the issue's repo has no Project, in
-which case the repo is shown next to the issue number), the issue number and
-title, the `Status` the sync would compute, whether a PR is linked, and whether
-the Story is already in sync.
+Reads from both APIs and writes nothing. Prints one row per assigned issue:
+its Project (or `[NO PROJECT]`, with the repo next to the issue number), the
+issue number and title, the `Status` the sync would compute, whether a PR is
+linked, and whether the Story is already in sync.
 
 ```sh
 forgesync status
@@ -243,10 +218,10 @@ forgesync status --repo owner/name
 
 ### Dry run — preview what would happen
 
-No writes to Notion. It prints the same summary a real sync would — the
+Writes nothing to Notion. Prints the same summary a real sync would — the
 `Created` / `Updated` / `Unchanged` / `Skipped` counts plus any errors — not a
-per-issue plan. Add `--verbose` (without `--json`) to see a debug line for each
-issue that would be written or is unchanged.
+per-issue plan. Add `--verbose` (without `--json`) for a debug line per issue
+that would be written or is unchanged.
 
 ```sh
 forgesync sync --dry-run   # or -d
@@ -261,8 +236,7 @@ forgesync sync --repo owner/name   # restrict to a single repo
 ```
 
 `--repo owner/name` narrows both sides of the sync: it filters the Notion
-`repo` field and the GitHub repo full name, case-insensitively. `projects` and
-`issues` don't take it — they always list everything.
+`repo` field and the GitHub repo full name, case-insensitively.
 
 ### Inspect the loaded configuration
 
@@ -290,17 +264,6 @@ the binary is touched. Doesn't read the config.
 forgesync update
 ```
 
-```
-Update forgesync 0.9.0 → 0.10.0? [y/N] y
-Downloading forgesync 0.10.0…
-Updated forgesync 0.9.0 → 0.10.0
-Release notes: https://github.com/nox456/forgesync/releases/tag/v0.10.0
-```
-
-- Only `y` or `yes` (any case) confirms. Enter, any other answer, or an empty
-  stdin cancels, so a closed stdin never replaces the binary. To confirm from a
-  script, pipe the answer: `echo y | forgesync update`.
-- When you're already on the latest release, it says so and doesn't prompt.
 - When the install directory isn't writable (the install script's default
   `/usr/local/bin`), it exits 1 and tells you to rerun with
   `sudo forgesync update`. It never runs `sudo` itself. On Windows, rerun from
@@ -308,193 +271,10 @@ Release notes: https://github.com/nox456/forgesync/releases/tag/v0.10.0
 - A binary installed with `go install` isn't replaced. `update` prints the
   `go install …@latest` command to run instead. A local `go build` (version
   `dev`) is refused as well.
-- No `--check` flag and no `--json` output. To see whether an update exists
-  without installing it, answer `n` at the prompt.
-
-### Update notice
-
-When a newer release exists, every command prints a one-line notice on
-**stderr** before its own output:
-
-```
-Update available! -> 0.10.0. Run: forgesync update
-```
-
-The notice reads a cached check, so it never waits on the network. When the
-cache is older than the check interval (6 hours by default), the command
-refreshes it in the background, from the unauthenticated GitHub Releases API
-(or authenticated, if `GITHUB_TOKEN` is set). The refresh runs alongside the
-command and is capped at 2 seconds from its start, so only a fast command on a
-slow network waits for it. A failed refresh is silent unless you pass
-`--verbose`, and the next command retries it.
-
-- The notice, and the background refresh, only run when **stderr is a
-  terminal**. Pipes, redirects, CI logs and editor integrations
-  (forgesync.nvim) get neither, and `--json` output on stdout is never touched.
-- Shell completion and `dev` builds never show it.
-- The cache lives in its own state file, not in `config.yaml`:
-  `$XDG_STATE_HOME/forgesync/update-check.yaml` (or
-  `~/.local/state/forgesync/update-check.yaml` when `XDG_STATE_HOME` is unset).
-
-```yaml
-last_checked_at: 2026-10-13T09:30:00Z
-latest_version: 0.10.0
-update_check_interval: 6h
-```
-
-`update_check_interval` takes a Go duration (`30m`, `12h`, `24h`). Set it to
-`0` to turn the background check off. A newer version already in the cache
-still prints until you update. A missing or invalid value means `6h`.
 
 ---
 
-## How your Notion databases need to be set up
+## Contributing
 
-The CLI expects these exact property names. Renaming one does not corrupt your
-data, but it does not produce a helpful error either: Notion omits the unknown
-property from its response, the decoder leaves the field at its zero value, and
-the first read of it panics with `index out of range`. Loud, but a stack trace
-rather than a message — see [Limitations](#limitations--known-caveats).
-
-### Project Manager database
-
-| Property | Type   | Required | Purpose                                    |
-| -------- | ------ | -------- | ------------------------------------------ |
-| `name`   | Title  | yes      | Project name                               |
-| `repo`   | Text   | yes      | GitHub repo as `owner/name` (the bridge)   |
-
-### Stories database
-
-| Property         | Type         | Required | Purpose                                                      |
-| ---------------- | ------------ | -------- | ------------------------------------------------------------ |
-| `Name`           | Title        | yes      | Issue title                                                  |
-| `Issue`          | Number       | yes      | GitHub issue number (the sync key)                           |
-| `URL`            | URL          | yes      | Link back to the GitHub issue                                |
-| `Status`         | Status       | yes      | One of: `Not started`, `In PR`, `In progress`, `Done`, `Cancelled` |
-| `Labels`         | Multi-select | yes      | Mirrored from GitHub labels                                  |
-| `Last Worked At` | Date         | yes      | Mirrored from the issue's `updated_at`                       |
-| `Finished Date`  | Date         | yes      | Set from `closed_at` when the issue is closed                |
-| `Project`        | Relation     | yes      | Relation to Project Manager (limit 1)                        |
-| `Created time`   | Created time | yes      | Auto-managed by Notion                                       |
-| `Prioridad`      | Select       | optional | User-managed; never touched by sync                          |
-
-The `Status` options must exist with exactly those names — Notion rejects a
-write to an option it doesn't know, so a database missing `In PR` fails on the
-first open issue that has a PR linked.
-
----
-
-## Project layout
-
-```
-forgesync/
-├── cmd/forgesync/         # CLI entry point
-└── internal/
-    ├── cli/               # cobra commands
-    ├── config/            # env + file config loading
-    ├── github/            # GitHub adapter (REST issues + GraphQL PR links)
-    ├── notion/            # Notion adapter (data sources API: reads + writes)
-    ├── output/            # text & JSON printers
-    ├── shared/            # domain types (Issue, Project, Story, …)
-    ├── status/            # read-only report behind `forgesync status`
-    ├── sync/              # orchestration & sync rules
-    └── update/            # release lookup, update notice, self-update
-```
-
-Dependencies only ever point downwards:
-
-```
-cli → output → status → sync → github → shared
-                  └──────────→ notion → shared
-cli → update
-```
-
-The graph shows the main path. Two shortcuts sit alongside it: `status` also
-imports `github` and `notion` directly, only for the concrete client types in
-`NewCollector`, and `sync` imports `github` only for the pure
-`NormalizeGithubBody` helper.
-
-`internal/shared` is the leaf: domain types, no imports of our own, no
-opinions. The adapters (`internal/github`, `internal/notion`) own their SDKs
-and speak `shared` types outward, so swapping an SDK stays a one-package
-change — neither one knows a sync exists. `internal/sync` owns every rule
-about *what* should happen (`ComputeStatus`, `IsSynced`, `IssueToStoryInput`)
-and drives the adapters through interfaces it declares itself. `internal/status`
-is a read-only sibling that reuses those rules to preview a run.
-
-`internal/update` imports none of our packages. It's the only package that
-imports `go-selfupdate`, the same rule the adapters follow for their SDKs, so
-`internal/cli` never sees a library type. The current version is passed in
-from `internal/cli`, and the pure parts (`IsNewer`, `ShouldCheck`,
-`ShouldNotify`, `IsGoInstall`) take every input as a parameter, the clock
-included.
-
-The one decision that could tempt an adapter upwards — "does this Story even
-need writing?" — lives in the engine, which checks `IsSynced` before calling
-`UpsertStory`. That keeps `internal/notion` a dumb pipe to the API.
-
----
-
-## Limitations & known caveats
-
-- **7-day window.** Only issues updated in the last 7 days are fetched. Older
-  issues are not synced. The window is a hardcoded constant that has already
-  moved more than once, which is the argument for making it configurable.
-- **A renamed Notion property panics instead of erroring.** The decoders index
-  straight into the JSON they expect (`Name.Title[0]`, `Repo.RichText[0]`,
-  `Project.Relation[0]`). A renamed or emptied property decodes to a zero
-  value, so those reads fail with `index out of range` and a stack trace. If
-  you rename a property, rename it back or update the code — the CLI has no
-  friendlier path yet.
-- **Duplicate-Story errors can be false positives.** Story lookup is keyed by
-  (Project, issue number), so the right Story is always the one that syncs.
-  The duplicate check, however, compares each Project's Stories against
-  **every** assigned issue by number alone. If two of your assigned issues
-  share a number across repos — or one of them is in a repo with no Project —
-  `sync` reports `found more than one story for issue N` even though nothing
-  is duplicated. A real duplicate (two Stories in one Project with the same
-  `Issue` number) produces the same error; `sync` keeps the first Story and
-  continues with the rest. `status` is stricter: it looks Stories up per
-  (Project, issue), so it only sees real duplicates, and aborts on them with
-  `found more than one story for issue N`.
-- **Rate limits.** Notion limits writes to ~3 req/s. For a typical personal
-  workspace this is well under the threshold. If you have hundreds of issues
-  you may want to add backoff.
-- **Linked-PR detection only sees closing references.** A PR that just
-  mentions the issue, without a closing keyword or a Development-sidebar link,
-  is never detected. Draft PRs are ignored until they're marked ready. A
-  closed-but-unmerged PR still counts as linked. Only the first 100 linked PRs
-  are checked.
-- **`--json` silences all logs.** With `--json`, nothing is written to stderr
-  except a fatal error — not even `--verbose` debug output.
-- **Fatal errors are printed twice.** When a command aborts, the error appears
-  on stderr twice — once prefixed with `Error:` and followed by the usage text,
-  and once plain — and the process exits with status 1. `update` is the
-  exception: it prints its error once.
-- **`go install` builds never get the update notice.** They report `version`
-  as `dev`, and `dev` builds skip the notice. `forgesync update` still points
-  them to the `go install …@latest` command.
-- **Time zones.** Dates are written as `YYYY-MM-DD HH:MM` in UTC (the timezone
-  offset is dropped). Notion displays them in your local time zone, so a value
-  can read a few hours — or a day — off from the GitHub timestamp.
-- **Manual `Status` edits are mostly preserved.** The sync folds your existing
-  Notion status into the result, so a manual status on an open issue normally
-  survives. The one exception is `In progress` + a linked PR, which is promoted
-  to `In PR`. Otherwise the PR state only decides the status of a Story that
-  has none yet (or is still `Not started`): a PR makes it `In PR`, otherwise
-  `Not started`. A closed issue you set to `Cancelled` stays `Cancelled`; any
-  other closed issue lands on `Done`. Other fields (`Name`, `Labels`,
-  `Last Worked At`, `Finished Date`) are always refreshed from GitHub.
-
----
-
-## Roadmap
-
-- [x] Unit tests on `sync/mapping` and `sync/status`
-- [x] Structured logging via `log/slog`
-- [x] Optional `--repo owner/name` flag to sync a single repo
-- [x] Break the `notion` → `utils` → `sync` dependency
-- [x] Update notice and `forgesync update` self-update
-- [ ] Configurable fetch window (currently a fixed 7 days)
-- [ ] Cache the Projects map between runs
-- [ ] Guard the Notion decoders against renamed or missing properties
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the project layout and how the
+packages depend on each other.
