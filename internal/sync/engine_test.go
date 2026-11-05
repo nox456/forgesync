@@ -503,12 +503,9 @@ func TestEngineRunReportsDuplicateStories(t *testing.T) {
 	}
 }
 
-// Expected failure: the plan (steps 2.3 and 2.4, sync loop) says an upsert
-// error carries the issue's Identifier and Provider. engine.go only sets
-// Identifier, so a failed upsert is reported with an empty provider.
+// An upsert error is recorded with the issue's Identifier and Provider (plan
+// steps 2.3 and 2.4, sync loop) and the remaining issues still sync.
 func TestEngineRunRecordsUpsertErrorsAndKeepsProcessing(t *testing.T) {
-	t.Skip("expected failure: engine.go sets only Identifier on upsert errors; plan 2.3/2.4 require Provider too")
-
 	quietLogs(t)
 
 	n := &fakeNotion{

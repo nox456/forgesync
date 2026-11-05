@@ -173,6 +173,8 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 			slog.Error(err.Error())
 			errors = append(errors, ReportError{
 				Identifier: issue.Identifier,
+				Provider:   issue.Provider,
+				Project:    project.Name,
 				Error:      err.Error(),
 			})
 			continue
