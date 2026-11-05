@@ -8,7 +8,7 @@ import (
 
 type Printer interface {
 	PrintProjects([]shared.Project)
-	PrintIssues([]shared.Issue)
+	PrintIssues([]shared.Issue, []sync.ReportError)
 	PrintReport(*sync.Report)
-	PrintStatus([]status.Row)
+	PrintStatus([]status.Row, []sync.ReportError)
 }

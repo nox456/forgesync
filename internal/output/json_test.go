@@ -111,12 +111,15 @@ func TestJSONPrintIssues(t *testing.T) {
 				{Provider: shared.ProviderLinear, Identifier: "ENG-7", Scope: "ENG", Title: "Plan it"},
 			}
 
-			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintIssues(issues) }))
+			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintIssues(issues, nil) }))
 
-			want := map[string]any{"issues": []any{
-				map[string]any{"provider": "github", "identifier": "#12", "scope": "owner/repo", "title": "Fix it", "has_linked_pr": true},
-				map[string]any{"provider": "linear", "identifier": "ENG-7", "scope": "ENG", "title": "Plan it", "has_linked_pr": false},
-			}}
+			want := map[string]any{
+				"issues": []any{
+					map[string]any{"provider": "github", "identifier": "#12", "scope": "owner/repo", "title": "Fix it", "has_linked_pr": true},
+					map[string]any{"provider": "linear", "identifier": "ENG-7", "scope": "ENG", "title": "Plan it", "has_linked_pr": false},
+				},
+				"errors": []any{},
+			}
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("PrintIssues() JSON mismatch (-want +got):\n%s", diff)
 			}
@@ -125,9 +128,9 @@ func TestJSONPrintIssues(t *testing.T) {
 
 	t.Run("edge cases", func(t *testing.T) {
 		t.Run("no issues marshal as an empty array", func(t *testing.T) {
-			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintIssues(nil) }))
+			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintIssues(nil, nil) }))
 
-			if diff := cmp.Diff(map[string]any{"issues": []any{}}, got); diff != "" {
+			if diff := cmp.Diff(map[string]any{"issues": []any{}, "errors": []any{}}, got); diff != "" {
 				t.Errorf("PrintIssues() JSON mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -152,18 +155,21 @@ func TestJSONPrintStatus(t *testing.T) {
 				Provider:    shared.ProviderGithub,
 			}}
 
-			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintStatus(rows) }))
+			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintStatus(rows, nil) }))
 
-			want := map[string]any{"rows": []any{map[string]any{
-				"identifier":   "#12",
-				"issue_title":  "Fix it",
-				"project_name": "ForgeSync",
-				"scope":        "owner/repo",
-				"status":       "In PR",
-				"has_pr":       true,
-				"is_synced":    true,
-				"provider":     "github",
-			}}}
+			want := map[string]any{
+				"rows": []any{map[string]any{
+					"identifier":   "#12",
+					"issue_title":  "Fix it",
+					"project_name": "ForgeSync",
+					"scope":        "owner/repo",
+					"status":       "In PR",
+					"has_pr":       true,
+					"is_synced":    true,
+					"provider":     "github",
+				}},
+				"errors": []any{},
+			}
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("PrintStatus() JSON mismatch (-want +got):\n%s", diff)
 			}
@@ -174,7 +180,7 @@ func TestJSONPrintStatus(t *testing.T) {
 		t.Run("a row without a project has a null project name", func(t *testing.T) {
 			rows := []status.Row{{Identifier: "#1", IssueScope: "owner/unknown", Provider: shared.ProviderGithub}}
 
-			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintStatus(rows) }))
+			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintStatus(rows, nil) }))
 
 			row := got["rows"].([]any)[0].(map[string]any)
 			value, present := row["project_name"]

@@ -12,22 +12,25 @@ import (
 	"github.com/nox456/forgesync/internal/sync"
 )
 
-// fakePrinter is an output.Printer that records the issues it was given.
+// fakePrinter is an output.Printer that records the issues and errors it was
+// given.
 type fakePrinter struct {
 	issues  []shared.Issue
+	errors  []sync.ReportError
 	printed bool
 }
 
 func (p *fakePrinter) PrintProjects([]shared.Project) {}
 
-func (p *fakePrinter) PrintIssues(issues []shared.Issue) {
+func (p *fakePrinter) PrintIssues(issues []shared.Issue, reportErrors []sync.ReportError) {
 	p.printed = true
 	p.issues = issues
+	p.errors = reportErrors
 }
 
 func (p *fakePrinter) PrintReport(*sync.Report) {}
 
-func (p *fakePrinter) PrintStatus([]status.Row) {}
+func (p *fakePrinter) PrintStatus([]status.Row, []sync.ReportError) {}
 
 // usePrinter swaps the global Printer for a fakePrinter until the test ends.
 func usePrinter(t *testing.T) *fakePrinter {
@@ -140,7 +143,7 @@ func TestIssuesCommand(t *testing.T) {
 	})
 
 	t.Run("error path", func(t *testing.T) {
-		t.Run("a provider error is returned and nothing is printed", func(t *testing.T) {
+		t.Run("a failing provider is reported and the other provider's issues are still printed", func(t *testing.T) {
 			fetchErr := errors.New("github is down")
 			github := &fakeProvider{name: shared.ProviderGithub, err: fetchErr}
 			linear := &fakeProvider{name: shared.ProviderLinear, issues: []shared.Issue{linearIssue}}
@@ -150,16 +153,16 @@ func TestIssuesCommand(t *testing.T) {
 			}, providerFlags{})
 			printer := usePrinter(t)
 
-			err := runIssues(t)
+			if err := runIssues(t); err != nil {
+				t.Fatalf("issues RunE unexpected error: %v", err)
+			}
 
-			if !errors.Is(err, fetchErr) {
-				t.Errorf("issues RunE error = %v, want %v", err, fetchErr)
+			if diff := cmp.Diff([]shared.Issue{linearIssue}, printer.issues); diff != "" {
+				t.Errorf("printed issues mismatch (-want +got):\n%s", diff)
 			}
-			if linear.fetched {
-				t.Errorf("Linear was fetched after GitHub failed, want the first error returned")
-			}
-			if printer.printed {
-				t.Errorf("issues were printed after a provider error")
+			wantErrors := []sync.ReportError{{Provider: shared.ProviderGithub, Error: "github is down"}}
+			if diff := cmp.Diff(wantErrors, printer.errors); diff != "" {
+				t.Errorf("printed errors mismatch (-want +got):\n%s", diff)
 			}
 		})
 

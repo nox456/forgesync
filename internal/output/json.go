@@ -78,7 +78,7 @@ func (p *JSONPrinter) PrintProjects(projects []shared.Project) {
 	fmt.Println(string(bytes))
 }
 
-func (p *JSONPrinter) PrintIssues(issues []shared.Issue) {
+func (p *JSONPrinter) PrintIssues(issues []shared.Issue, reportErrors []sync.ReportError) {
 	parsedIssues := make([]Issue, len(issues))
 
 	for i, issue := range issues {
@@ -93,7 +93,8 @@ func (p *JSONPrinter) PrintIssues(issues []shared.Issue) {
 
 	bytes, err := json.Marshal(struct {
 		Issues []Issue `json:"issues"`
-	}{Issues: parsedIssues})
+		Errors []Error `json:"errors"`
+	}{Issues: parsedIssues, Errors: parseErrors(reportErrors)})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
@@ -103,23 +104,12 @@ func (p *JSONPrinter) PrintIssues(issues []shared.Issue) {
 }
 
 func (p *JSONPrinter) PrintReport(report *sync.Report) {
-	errors := make([]Error, 0, len(report.Errors))
-
-	for _, error := range report.Errors {
-		errors = append(errors, Error{
-			Provider:   string(error.Provider),
-			Project:    error.Project,
-			Identifier: error.Identifier,
-			Message:    error.Error,
-		})
-	}
-
 	parsedReport := Report{
 		Created:   report.Created,
 		Updated:   report.Updated,
 		Skipped:   report.Skipped,
 		Unchanged: report.Unchanged,
-		Errors:    errors,
+		Errors:    parseErrors(report.Errors),
 	}
 
 	bytes, err := json.Marshal(struct {
@@ -133,7 +123,7 @@ func (p *JSONPrinter) PrintReport(report *sync.Report) {
 	fmt.Print(string(bytes))
 }
 
-func (p *JSONPrinter) PrintStatus(rows []status.Row) {
+func (p *JSONPrinter) PrintStatus(rows []status.Row, reportErrors []sync.ReportError) {
 	parsedRows := make([]StatusRow, len(rows))
 
 	for i, row := range rows {
@@ -150,12 +140,28 @@ func (p *JSONPrinter) PrintStatus(rows []status.Row) {
 	}
 
 	bytes, err := json.Marshal(struct {
-		Rows []StatusRow `json:"rows"`
-	}{Rows: parsedRows})
+		Rows   []StatusRow `json:"rows"`
+		Errors []Error     `json:"errors"`
+	}{Rows: parsedRows, Errors: parseErrors(reportErrors)})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
 	fmt.Print(string(bytes))
+}
+
+func parseErrors(reportErrors []sync.ReportError) []Error {
+	errors := make([]Error, 0, len(reportErrors))
+
+	for _, error := range reportErrors {
+		errors = append(errors, Error{
+			Provider:   string(error.Provider),
+			Project:    error.Project,
+			Identifier: error.Identifier,
+			Message:    error.Error,
+		})
+	}
+
+	return errors
 }

@@ -2,6 +2,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -32,22 +33,25 @@ func NewCollector(notionClient Notion, providers []sync.Provider) *Collector {
 	}
 }
 
-func (c *Collector) Collect(ctx context.Context, filter shared.ProjectFilter) ([]Row, error) {
+func (c *Collector) Collect(ctx context.Context, filter shared.ProjectFilter, narrowed bool) ([]Row, []sync.ReportError, error) {
 	slog.Info("Fetching notion projects...")
 	projects, err := c.NotionClient.ListProjects(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	projectsLookup := make(map[projectKey]shared.Project, len(projects))
+	eligible, reportErrors := sync.ClassifyProjects(projects, c.Providers, narrowed)
 
-	for _, project := range projects {
+	projectsLookup := make(map[projectKey]shared.Project, len(eligible))
+
+	for _, project := range eligible {
 		projectsLookup[projectKey{project.Provider, strings.ToLower(project.GetScope())}] = project
 	}
 
 	slog.Info("Fetching github issues...")
 
 	var issues []shared.Issue
+	var fetchErrors []error
 
 	for _, p := range c.Providers {
 		f := filter.Repo
@@ -56,9 +60,19 @@ func (c *Collector) Collect(ctx context.Context, filter shared.ProjectFilter) ([
 		}
 		got, err := p.FetchAssignedIssues(ctx, f)
 		if err != nil {
-			return nil, err
+			slog.Error(err.Error())
+			reportErrors = append(reportErrors, sync.ReportError{
+				Provider: p.Name(),
+				Error:    err.Error(),
+			})
+			fetchErrors = append(fetchErrors, err)
+			continue
 		}
 		issues = append(issues, got...)
+	}
+
+	if len(fetchErrors) > 0 && len(fetchErrors) == len(c.Providers) {
+		return nil, nil, errors.Join(fetchErrors...)
 	}
 
 	rows := make([]Row, 0)
@@ -75,10 +89,10 @@ func (c *Collector) Collect(ctx context.Context, filter shared.ProjectFilter) ([
 
 		existingStory, err := c.NotionClient.FindStoryByIssue(ctx, issue, project.PageID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		rows = append(rows, BuildRow(issue, &project, existingStory))
 	}
-	return rows, nil
+	return rows, reportErrors, nil
 }

@@ -90,7 +90,7 @@ func TestCollectMatchesProjectRepoIgnoringCase(t *testing.T) {
 		}},
 	)
 
-	rows, err := collector.Collect(context.Background(), shared.ProjectFilter{})
+	rows, _, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCollect(t *testing.T) {
 				},
 			)
 
-			rows, err := collector.Collect(context.Background(), shared.ProjectFilter{})
+			rows, _, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
 			if err != nil {
 				t.Fatalf("Collect() error = %v", err)
 			}
@@ -146,7 +146,7 @@ func TestCollect(t *testing.T) {
 			collector := NewCollector(n, []sync.Provider{g, l})
 
 			filter := shared.ProjectFilter{Repo: "owner/repo", TeamKey: "ENG"}
-			if _, err := collector.Collect(context.Background(), filter); err != nil {
+			if _, _, err := collector.Collect(context.Background(), filter, false); err != nil {
 				t.Fatalf("Collect() error = %v", err)
 			}
 
@@ -187,7 +187,7 @@ func TestCollect(t *testing.T) {
 					[]sync.Provider{&fakeProvider{name: tc.issue.Provider, issues: []shared.Issue{tc.issue}}},
 				)
 
-				rows, err := collector.Collect(context.Background(), shared.ProjectFilter{})
+				rows, _, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
 				if err != nil {
 					t.Fatalf("Collect() error = %v", err)
 				}
@@ -216,7 +216,7 @@ func TestCollect(t *testing.T) {
 				provider: &fakeProvider{name: shared.ProviderGithub},
 			},
 			{
-				name:     "a provider fetch error is returned",
+				name:     "a fetch error from the only provider is returned",
 				notion:   &fakeNotion{projects: []shared.Project{project}},
 				provider: &fakeProvider{name: shared.ProviderGithub, err: wantErr},
 			},
@@ -231,7 +231,7 @@ func TestCollect(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				collector := NewCollector(tc.notion, []sync.Provider{tc.provider})
 
-				rows, err := collector.Collect(context.Background(), shared.ProjectFilter{})
+				rows, _, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
 				if !errors.Is(err, wantErr) {
 					t.Fatalf("Collect() error = %v, want %v", err, wantErr)
 				}

@@ -34,7 +34,7 @@ func (p *TextPrinter) PrintProjects(projects []shared.Project) {
 	}
 }
 
-func (p *TextPrinter) PrintIssues(issues []shared.Issue) {
+func (p *TextPrinter) PrintIssues(issues []shared.Issue, reportErrors []sync.ReportError) {
 	fmt.Println("==== Issues ====")
 
 	fmt.Fprintln(p.printer, "Provider\tIssue\tScope\tTitle\tState\tHas PR")
@@ -63,6 +63,8 @@ func (p *TextPrinter) PrintIssues(issues []shared.Issue) {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
+
+	printErrors(reportErrors)
 }
 
 func (p *TextPrinter) PrintReport(report *sync.Report) {
@@ -79,22 +81,10 @@ func (p *TextPrinter) PrintReport(report *sync.Report) {
 		return
 	}
 
-	if len(report.Errors) > 0 {
-		fmt.Println("\nErrors:")
-		for _, error := range report.Errors {
-			switch {
-			case error.Identifier != "":
-				fmt.Printf("* %s %s: %s\n", error.Provider, error.Identifier, error.Error)
-			case error.Project != "":
-				fmt.Printf("* %s: %s\n", error.Project, error.Error)
-			default:
-				fmt.Printf("* %s: %s\n", error.Provider, error.Error)
-			}
-		}
-	}
+	printErrors(report.Errors)
 }
 
-func (p *TextPrinter) PrintStatus(rows []status.Row) {
+func (p *TextPrinter) PrintStatus(rows []status.Row, reportErrors []sync.ReportError) {
 	fmt.Println("==== Status ====")
 	fmt.Fprintln(p.printer, "Provider\tProject\tIssue\tTitle\tStatus\tHas PR\tIs Synced")
 	for _, row := range rows {
@@ -130,5 +120,25 @@ func (p *TextPrinter) PrintStatus(rows []status.Row) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
+	}
+
+	printErrors(reportErrors)
+}
+
+func printErrors(reportErrors []sync.ReportError) {
+	if len(reportErrors) == 0 {
+		return
+	}
+
+	fmt.Println("\nErrors:")
+	for _, error := range reportErrors {
+		switch {
+		case error.Identifier != "":
+			fmt.Printf("* %s %s: %s\n", error.Provider, error.Identifier, error.Error)
+		case error.Project != "":
+			fmt.Printf("* %s: %s\n", error.Project, error.Error)
+		default:
+			fmt.Printf("* %s: %s\n", error.Provider, error.Error)
+		}
 	}
 }

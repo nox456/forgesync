@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"errors"
+	"log/slog"
+
 	"github.com/nox456/forgesync/internal/shared"
+	"github.com/nox456/forgesync/internal/sync"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +26,8 @@ var issuesCmd = &cobra.Command{
 		}
 
 		var issues []shared.Issue
+		var fetchErrors []error
+		reportErrors := make([]sync.ReportError, 0)
 
 		for _, p := range providers {
 			f := resolved.Repo
@@ -31,13 +37,23 @@ var issuesCmd = &cobra.Command{
 
 			got, err := p.FetchAssignedIssues(cmd.Context(), f)
 			if err != nil {
-				return err
+				slog.Error(err.Error())
+				reportErrors = append(reportErrors, sync.ReportError{
+					Provider: p.Name(),
+					Error:    err.Error(),
+				})
+				fetchErrors = append(fetchErrors, err)
+				continue
 			}
 
 			issues = append(issues, got...)
 		}
 
-		Printer.PrintIssues(issues)
+		if len(fetchErrors) > 0 && len(fetchErrors) == len(providers) {
+			return errors.Join(fetchErrors...)
+		}
+
+		Printer.PrintIssues(issues, reportErrors)
 		return nil
 	},
 }

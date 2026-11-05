@@ -90,7 +90,7 @@ func TestTextPrintTables(t *testing.T) {
 		t.Run("issues table has a provider column aligned with its rows", func(t *testing.T) {
 			issues := []shared.Issue{{Provider: shared.ProviderGithub, Identifier: "#12", Scope: "owner/repo", Title: "FixTitle", State: "open"}}
 
-			out := captureStdout(t, func() { NewTextPrinter().PrintIssues(issues) })
+			out := captureStdout(t, func() { NewTextPrinter().PrintIssues(issues, nil) })
 
 			header := lineContaining(t, out, "Provider")
 			row := lineContaining(t, out, "#12")
@@ -102,7 +102,7 @@ func TestTextPrintTables(t *testing.T) {
 		t.Run("status table has a provider column aligned with its rows", func(t *testing.T) {
 			rows := []status.Row{{Provider: shared.ProviderGithub, Identifier: "#12", ProjectName: &projectName, IssueTitle: "FixTitle", Status: "InPR"}}
 
-			out := captureStdout(t, func() { NewTextPrinter().PrintStatus(rows) })
+			out := captureStdout(t, func() { NewTextPrinter().PrintStatus(rows, nil) })
 
 			header := lineContaining(t, out, "Provider")
 			row := lineContaining(t, out, "#12")
@@ -132,7 +132,7 @@ func TestTextPrintTables(t *testing.T) {
 		t.Run("a status row without a project shows the issue scope next to its identifier", func(t *testing.T) {
 			rows := []status.Row{{Provider: shared.ProviderGithub, Identifier: "#3", IssueScope: "owner/unknown", IssueTitle: "Orphan"}}
 
-			out := captureStdout(t, func() { NewTextPrinter().PrintStatus(rows) })
+			out := captureStdout(t, func() { NewTextPrinter().PrintStatus(rows, nil) })
 
 			row := lineContaining(t, out, "#3")
 			if !strings.Contains(row, "[NO PROJECT]") || !strings.Contains(row, "#3 (owner/unknown)") {

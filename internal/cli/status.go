@@ -24,13 +24,13 @@ var statusCmd = &cobra.Command{
 
 		collector := status.NewCollector(NotionClient, providers)
 
-		rows, err := collector.Collect(cmd.Context(), shared.ProjectFilter{Repo: resolved.Repo, TeamKey: resolved.TeamKey})
+		rows, reportErrors, err := collector.Collect(cmd.Context(), shared.ProjectFilter{Repo: resolved.Repo, TeamKey: resolved.TeamKey}, resolved.Narrowed)
 
 		if err != nil {
 			return err
 		}
 
-		Printer.PrintStatus(rows)
+		Printer.PrintStatus(rows, reportErrors)
 		return nil
 	},
 }
