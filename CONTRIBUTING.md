@@ -9,6 +9,7 @@ forgesync/
     ├── cli/               # cobra commands
     ├── config/            # env + file config loading
     ├── github/            # GitHub adapter (REST issues + GraphQL PR links)
+    ├── linear/            # Linear adapter (GraphQL issues, standard library only)
     ├── notion/            # Notion adapter (data sources API: reads + writes)
     ├── output/            # text & JSON printers
     ├── shared/            # domain types (Issue, Project, Story, …)
@@ -20,23 +21,34 @@ forgesync/
 Dependencies only ever point downwards:
 
 ```
-cli → output → status → sync → github → shared
-                  └──────────→ notion → shared
-cli → update
+cli → output → status → sync → shared
+cli → github, linear, notion → shared
+cli → config, update
 ```
 
-The graph shows the main path. Two shortcuts sit alongside it: `status` also
-imports `github` and `notion` directly, only for the concrete client types in
-`NewCollector`, and `sync` imports `github` only for the pure
-`NormalizeGithubBody` helper.
+Only `internal/cli` imports the adapters. It builds the clients and hands them
+to `sync` and `status` through interfaces those packages declare themselves
+(`sync.Provider`, `sync.Notion`, `status.Notion`), so neither knows which
+concrete client it is driving.
 
 `internal/shared` is the leaf: domain types, no imports of our own, no
-opinions. The adapters (`internal/github`, `internal/notion`) own their SDKs
-and speak `shared` types outward, so swapping an SDK stays a one-package
-change — neither one knows a sync exists. `internal/sync` owns every rule
-about *what* should happen (`ComputeStatus`, `IsSynced`, `IssueToStoryInput`)
-and drives the adapters through interfaces it declares itself. `internal/status`
-is a read-only sibling that reuses those rules to preview a run.
+opinions. The adapters (`internal/github`, `internal/linear`,
+`internal/notion`) own their API clients (`go-github` for GitHub, plain
+`net/http` for Linear and Notion) and speak `shared` types outward, so
+swapping a client stays a one-package change — none of them knows a sync
+exists. Each issue adapter cleans up its own issue bodies before handing them
+over. `internal/sync` owns every rule about *what*
+should happen (`ComputeStatus`, `IsSynced`, `IssueToStoryInput`,
+`ClassifyProjects`). `internal/status` is a read-only sibling that reuses
+those rules to preview a run.
+
+`sync.Provider` is the extension point for a new issue source. A provider
+implements `Name()` and `FetchAssignedIssues(ctx, filter)` in its own adapter
+package. Adding one also means a `shared.Provider` constant, a case in
+`ComputeStatus` with its status rules, the known-provider check in
+`ClassifyProjects`, a case in the `provider` select mapping in
+`notion.ListProjects`, a token in `internal/config`, and the wiring and
+`--provider` value in `internal/cli`.
 
 `internal/update` imports none of our packages. It's the only package that
 imports `go-selfupdate`, the same rule the adapters follow for their SDKs, so

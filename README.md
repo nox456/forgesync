@@ -1,35 +1,56 @@
 # forgesync
 
-A small Go CLI that syncs the GitHub issues assigned to you into Notion. Each
-issue becomes a Story in your Stories database, linked to the matching Project
-in your Project Manager database.
+A small Go CLI that syncs the GitHub and Linear issues assigned to you into
+Notion. Each issue becomes a Story in your Stories database, linked to the
+matching Project in your Project Manager database.
 
-One-way sync (GitHub → Notion), run on demand. No daemon, no webhooks.
+One-way sync (GitHub and Linear → Notion), run on demand. No daemon, no
+webhooks.
 
 ---
 
 ## How it works
 
-For every issue assigned to you on GitHub (updated in the last 7 days, pull
-requests excluded), `forgesync sync`:
+For every issue assigned to you and updated in the last 7 days, on GitHub
+(pull requests excluded) and on Linear (triage issues excluded),
+`forgesync sync`:
 
-1. Looks up the issue's repo (`owner/name`) in your **Project Manager**
-   database through its `repo` field. If no Project matches, the issue is
-   skipped.
+1. Looks up the issue's Project in your **Project Manager** database. Each
+   Project's `provider` says where its issues come from: a GitHub issue matches
+   the Project whose `repo` is its repo (`owner/name`), and a Linear issue
+   matches the Project whose `teamKey` is its team's key (e.g. `ENG`). Both
+   comparisons ignore case. If no Project matches, the issue is skipped.
 2. Creates or updates the issue's Story in your **Stories** database, linked
    to that Project.
 3. Keeps the Story's `Name`, `Labels`, `Last Worked At`, and `Finished Date` in
    sync with the issue, mirrors the issue body into the Story's page content,
-   and computes its `Status` (see [Status mapping](#status-mapping)). The
-   `URL`, `Issue` number, and `Project` relation are set once, when the Story
-   is created.
+   and computes its `Status` (see [Status mapping](#status-mapping)). Images
+   uploaded to Linear are left out of the body: they need your Linear login and
+   would show as broken in Notion. The `URL`, `Issue` identifier (`#12` on
+   GitHub, `ENG-123` on Linear), and `Project` relation are set once, when the
+   Story is created.
 
-A Story is identified by its **(Project, issue number)** pair, so running
+A Story is identified by its **(Project, issue identifier)** pair, so running
 `forgesync sync` again is always safe: existing Stories are updated, missing
 ones are created, and a Story whose `Name`, `Status`, `Labels`, and
 `Last Worked At` already match is reported as `Unchanged` and left alone.
 
+Only the providers you have a token for are used (see
+[Configuration](#configuration)). Problems don't stop the run; they are
+listed under `Errors` at the end:
+
+- A provider that fails (an expired token, an API outage). The other provider
+  still syncs.
+- A Project with no `provider`, an unknown one, or a provider you have no token
+  for. Its issues are skipped.
+
 ### Status mapping
+
+GitHub and Linear follow different rules. GitHub keeps most statuses you set
+by hand in Notion; Linear always overwrites them, because the Linear issue
+already has a status of its own.
+
+#### GitHub
 
 A new Story gets its `Status` from the GitHub issue alone:
 
@@ -49,15 +70,38 @@ manual edits you make in Notion survive:
 - **Open issue, any other status** (`Done`, `Cancelled`, `In PR`): kept.
 - **Closed issue:** becomes `Done`, unless you set it to `Cancelled`.
 
-`forgesync` never writes `In progress` itself. You set it in Notion to mark
-that you've started work, and the sync promotes it to `In PR` when a PR
-appears.
+A PR counts as linked when it closes the issue; draft PRs don't count.
+
+`forgesync` never writes `In progress` for a GitHub issue. You set it in
+Notion to mark that you've started work, and the sync promotes it to `In PR`
+when a PR appears.
+
+#### Linear
+
+Every sync takes the `Status` from the Linear issue's workflow state type,
+whatever the Story says:
+
+| Linear state type     | Linked PR? | Notion `Status` |
+| --------------------- | ---------- | --------------- |
+| Backlog, Unstarted    | any        | `Not started`   |
+| Started               | no         | `In progress`   |
+| Started               | yes        | `In PR`         |
+| Completed             | any        | `Done`          |
+| Canceled              | any        | `Cancelled`     |
+
+The state type is the category a workflow state belongs to, so a custom state
+like "In Review" counts as Started. A status you edit by hand in Notion is
+overwritten on the next sync, so change it in Linear instead.
+
+A PR counts as linked when a GitHub pull request is attached to the Linear
+issue, drafts included.
 
 ### What it never changes
 
 - `URL`, `Issue`, and `Project` after the Story is created
-- `Finished Date` while the issue is open (it's set from `closed_at` once the
-  issue closes)
+- `Finished Date` while the issue is open. It's set from GitHub's `closed_at`
+  once the issue closes, or from Linear's `completedAt` once it's completed. A
+  canceled Linear issue never gets one.
 - `Created time`, which Notion manages, and any property not listed above
   (e.g. `Prioridad` — you own it in Notion)
 
@@ -65,9 +109,12 @@ appears.
 
 ## Requirements
 
-- A GitHub personal access token: classic with the `repo` scope, or
-  fine-grained with `Issues: read`, `Pull requests: read`, and
-  `Metadata: read` on the repos you care about.
+- At least one of:
+  - A GitHub personal access token: classic with the `repo` scope, or
+    fine-grained with `Issues: read`, `Pull requests: read`, and
+    `Metadata: read` on the repos you care about.
+  - A Linear personal API key, created under **Settings → Account → Security
+    & access** (<https://linear.app/settings/account/security>).
 - A Notion internal integration token, created at
   <https://www.notion.so/profile/integrations>, with your Project Manager and
   Stories databases shared with it.
@@ -153,15 +200,18 @@ Environment variables prefixed with `FORGESYNC_` override the file's values.
 | Key                  | Env var                         | Description                                       |
 | -------------------- | ------------------------------- | ------------------------------------------------- |
 | `github_token`       | `FORGESYNC_GITHUB_TOKEN`        | GitHub personal access token                      |
+| `linear_token`       | `FORGESYNC_LINEAR_TOKEN`        | Linear personal API key                           |
 | `notion_token`       | `FORGESYNC_NOTION_TOKEN`        | Notion integration token                          |
 | `projects_source_id` | `FORGESYNC_PROJECTS_SOURCE_ID`  | Data source ID of the Project Manager database    |
 | `stories_source_id`  | `FORGESYNC_STORIES_SOURCE_ID`   | Data source ID of the Stories database            |
 
-All four are required.
+`notion_token`, `projects_source_id`, and `stories_source_id` are required,
+plus at least one of `github_token` and `linear_token`.
 
 ```yaml
 # ~/.config/forgesync/config.yaml
 github_token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+linear_token: lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # either token, or both
 notion_token: ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 projects_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 stories_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -170,6 +220,7 @@ stories_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```sh
 # Overriding with environment variables
 export FORGESYNC_GITHUB_TOKEN=ghp_...
+export FORGESYNC_LINEAR_TOKEN=lin_api_...
 export FORGESYNC_NOTION_TOKEN=ntn_...
 export FORGESYNC_PROJECTS_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 export FORGESYNC_STORIES_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -186,7 +237,31 @@ export FORGESYNC_STORIES_SOURCE_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 | `--json`    | Print output as JSON. Also discards all logs, `--verbose` included. `update` rejects it |
 | `--verbose` | Enable debug-level logging on stderr (no effect with `--json`)     |
 
-`--repo owner/name` is **not** global: only `sync` and `status` accept it.
+### Choosing providers
+
+`sync`, `status`, and `issues` use every provider you have a token for. Three
+flags, accepted only by those commands, narrow a run:
+
+| Flag         | Value                         | Effect                                              |
+| ------------ | ----------------------------- | --------------------------------------------------- |
+| `--provider` | `github` or `linear`          | Only that provider                                  |
+| `--repo`     | `owner/name`                  | Only that GitHub repo (implies `--provider github`) |
+| `--team`     | a Linear team key, e.g. `ENG` | Only that Linear team (implies `--provider linear`) |
+
+`--repo` and `--team` ignore case and filter both sides: the issues fetched
+and the Notion Projects. When a flag narrows the run, Projects of the other
+provider are skipped quietly instead of being reported.
+
+These are rejected before any API call:
+
+- `--repo` together with `--team`
+- `--repo` with `--provider linear`, or `--team` with `--provider github`
+- a `--provider` other than `github` or `linear`
+- a flag for a provider you have no token for
+
+A provider that fails is listed under `Errors` after the output, and the other
+provider still runs. `status` and `issues` exit with an error only when every
+provider fails.
 
 ### Sanity check — list Projects
 
@@ -198,22 +273,27 @@ forgesync projects
 
 ### List assigned issues
 
-Shows the GitHub issues `forgesync` would consider, with their linked-PR status.
+Shows the issues `forgesync` would consider: provider, identifier, repo or
+team key, title, state, and whether a PR is linked.
 
 ```sh
 forgesync issues
+forgesync issues --team ENG
 ```
 
 ### Status report — what the sync would compute
 
-Reads from both APIs and writes nothing. Prints one row per assigned issue:
-its Project (or `[NO PROJECT]`, with the repo next to the issue number), the
-issue number and title, the `Status` the sync would compute, whether a PR is
-linked, and whether the Story is already in sync.
+Reads from Notion and your providers and writes nothing. Prints one row per
+assigned issue: its provider, its Project (or `[NO PROJECT]`, with the repo or
+team key next to the identifier), the identifier and title, the `Status` the
+sync would compute, whether a PR is linked, and whether the Story is already in
+sync. Problems, such as a failing provider or a misconfigured Project, are
+listed after the table.
 
 ```sh
 forgesync status
 forgesync status --repo owner/name
+forgesync status --provider linear
 ```
 
 ### Dry run — preview what would happen
@@ -232,11 +312,9 @@ forgesync sync --dry-run --verbose
 
 ```sh
 forgesync sync
-forgesync sync --repo owner/name   # restrict to a single repo
+forgesync sync --repo owner/name   # restrict to a single GitHub repo
+forgesync sync --team ENG          # restrict to a single Linear team
 ```
-
-`--repo owner/name` narrows both sides of the sync: it filters the Notion
-`repo` field and the GitHub repo full name, case-insensitively.
 
 ### Inspect the loaded configuration
 
@@ -271,6 +349,28 @@ forgesync update
 - A binary installed with `go install` isn't replaced. `update` prints the
   `go install …@latest` command to run instead. A local `go build` (version
   `dev`) is refused as well.
+
+### JSON output
+
+With `--json`, `projects`, `issues`, `status`, and `sync` print one JSON
+object on stdout. From v1.0.0 these fields are a stable contract: removing or
+retyping one is a breaking change. The table lists field names only:
+
+| Command    | Shape                                                                                                                       |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `projects` | `{"projects": [{"name", "scope", "provider"}]}`                                                                             |
+| `issues`   | `{"issues": [{"identifier", "scope", "title", "has_linked_pr", "provider"}], "errors": [...]}`                              |
+| `status`   | `{"rows": [{"identifier", "issue_title", "project_name", "scope", "status", "has_pr", "is_synced", "provider"}], "errors": [...]}` |
+| `sync`     | `{"report": {"created", "updated", "skipped", "unchanged", "errors": [...]}}`                                               |
+
+- `identifier` is a string: `#12` on GitHub, `ENG-123` on Linear.
+- `provider` is `github` or `linear`.
+- `scope` is the repo (`owner/name`) for GitHub and the team key for Linear.
+- `project_name` is `null` when no Project matches the issue.
+- `errors` is always an array, `[]` when there are none. Each error is
+  `{"provider", "project", "identifier", "message"}`: `message` is always
+  there, the other three only when they apply. A failing provider has just
+  `provider` and `message`; a misconfigured Project has `project`.
 
 ---
 
