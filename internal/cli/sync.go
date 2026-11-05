@@ -9,19 +9,28 @@ var DryRun bool
 
 func init() {
 	syncCmd.Flags().BoolVarP(&DryRun, "dry-run", "d", false, "Dry run - Don't perform any changes, just print the results")
-	syncCmd.Flags().StringVarP(&RepoName, "repo", "", "", "Only sync issues from this repo (format: owner/repo)")
+	syncCmd.Flags().StringVarP(&RepoName, "repo", "", "", "Only sync issues from this repo (GitHub, format: owner/repo)")
+	syncCmd.Flags().StringVarP(&TeamKey, "team", "", "", "Only sync issues from this team (Linear, example: ENG)")
+	syncCmd.Flags().StringVarP(&ProviderName, "provider", "", "", "Only sync issues from this provider (github or linear)")
 	rootCmd.AddCommand(syncCmd)
 }
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Sync Notion stories with GitHub issuse (use --dry-run to see what would be changed without actually changing anything)",
+	Short: "Sync Notion stories with GitHub issues (use --dry-run to see what would be changed without actually changing anything)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		engine := sync.NewEngine(NotionClient, Providers)
+		providers, resolved, err := getActiveProviders()
+		if err != nil {
+			return err
+		}
+
+		engine := sync.NewEngine(NotionClient, providers)
 
 		report, err := engine.Run(cmd.Context(), sync.EngineRunOptions{
-			DryRun: DryRun,
-			Repo:   RepoName,
+			DryRun:            DryRun,
+			Repo:              resolved.Repo,
+			Team:              resolved.TeamKey,
+			ProvidersNarrowed: resolved.Narrowed,
 		})
 
 		if err != nil {

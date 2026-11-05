@@ -10,6 +10,7 @@ import (
 	"github.com/nox456/forgesync/internal/github"
 	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/output"
+	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/status"
 	"github.com/nox456/forgesync/internal/sync"
 	"github.com/nox456/forgesync/internal/update"
@@ -19,10 +20,11 @@ import (
 var JSONOutput bool
 var Printer output.Printer
 var Config *config.Config
-var GithubClient *github.Client
 var NotionClient *notion.Client
 var Verbose bool
 var RepoName string
+var ProviderName string
+var TeamKey string
 
 var (
 	_ sync.Provider = (*github.Client)(nil)
@@ -30,7 +32,7 @@ var (
 	_ status.Notion = (*notion.Client)(nil)
 )
 
-var Providers []sync.Provider
+var Providers map[shared.Provider]sync.Provider
 
 var rootCmd = &cobra.Command{
 	Use:   "forgesync",
@@ -66,12 +68,16 @@ var rootCmd = &cobra.Command{
 
 		Config = config
 
-		GithubClient, err = github.NewClient(Config.GitHubToken)
-		if err != nil {
-			return err
-		}
+		Providers = make(map[shared.Provider]sync.Provider)
 
-		Providers = append(Providers, GithubClient)
+		if Config.GitHubToken != "" {
+			githubClient, err := github.NewClient(Config.GitHubToken)
+			if err != nil {
+				return err
+			}
+
+			Providers[shared.ProviderGithub] = githubClient
+		}
 
 		NotionClient = notion.NewClient(Config.NotionToken, Config.ProjectsSourceId, Config.StoriesSourceId)
 
