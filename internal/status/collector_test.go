@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/sync"
 )
@@ -240,5 +241,133 @@ func TestCollect(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+// Phase 4 step 3: status reports misconfigured projects and failing providers
+// next to the rows instead of aborting, and fails only when every provider does.
+func TestCollectReportsProblems(t *testing.T) {
+	quietLogs(t)
+
+	githubProject := shared.Project{PageID: "p-gh", Name: "Repo project", Repo: "owner/repo", Provider: shared.ProviderGithub}
+	linearProject := shared.Project{PageID: "p-lin", Name: "Team project", TeamKey: "ENG", Provider: shared.ProviderLinear}
+	githubIssue := shared.Issue{Provider: shared.ProviderGithub, Identifier: "#1", Scope: "owner/repo", State: "open"}
+
+	t.Run("happy path", func(t *testing.T) {
+		t.Run("a failing Linear still returns the GitHub rows plus one linear error", func(t *testing.T) {
+			collector := NewCollector(
+				&fakeNotion{projects: []shared.Project{githubProject, linearProject}},
+				[]sync.Provider{
+					&fakeProvider{name: shared.ProviderGithub, issues: []shared.Issue{githubIssue}},
+					&fakeProvider{name: shared.ProviderLinear, err: errors.New("linear api 401: Authentication required")},
+				},
+			)
+
+			rows, reportErrors, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
+			if err != nil {
+				t.Fatalf("Collect() unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(map[string]string{"#1": "Repo project"}, projectNames(rows)); diff != "" {
+				t.Errorf("issue → project mismatch (-want +got):\n%s", diff)
+			}
+			want := []sync.ReportError{{Provider: shared.ProviderLinear, Error: "linear api 401: Authentication required"}}
+			if diff := cmp.Diff(want, reportErrors); diff != "" {
+				t.Errorf("Collect() errors mismatch (-want +got):\n%s", diff)
+			}
+		})
+
+		t.Run("projects with no provider or an unknown one are reported next to the rows", func(t *testing.T) {
+			collector := NewCollector(
+				&fakeNotion{projects: []shared.Project{
+					githubProject,
+					{PageID: "p-empty", Name: "Empty", Repo: "owner/repo"},
+					{PageID: "p-typo", Name: "Typo", Repo: "owner/repo", Provider: "gitlab"},
+				}},
+				[]sync.Provider{&fakeProvider{name: shared.ProviderGithub, issues: []shared.Issue{githubIssue}}},
+			)
+
+			rows, reportErrors, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
+			if err != nil {
+				t.Fatalf("Collect() unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(map[string]string{"#1": "Repo project"}, projectNames(rows)); diff != "" {
+				t.Errorf("issue → project mismatch (-want +got):\n%s", diff)
+			}
+			want := []sync.ReportError{
+				{Project: "Empty", Error: "project has no provider"},
+				{Project: "Typo", Error: `unknown provider "gitlab"`},
+			}
+			if diff := cmp.Diff(want, reportErrors); diff != "" {
+				t.Errorf("Collect() errors mismatch (-want +got):\n%s", diff)
+			}
+		})
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			narrowed bool
+			want     []sync.ReportError
+		}{
+			{
+				name:     "a Linear project without the Linear provider is reported when the run is not narrowed",
+				narrowed: false,
+				want:     []sync.ReportError{{Project: "Team project", Provider: shared.ProviderLinear, Error: "linear token not configured"}},
+			},
+			{
+				name:     "a Linear project without the Linear provider is skipped quietly on a narrowed run",
+				narrowed: true,
+				want:     nil,
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				collector := NewCollector(
+					&fakeNotion{projects: []shared.Project{githubProject, linearProject}},
+					[]sync.Provider{&fakeProvider{name: shared.ProviderGithub, issues: []shared.Issue{githubIssue}}},
+				)
+
+				rows, reportErrors, err := collector.Collect(context.Background(), shared.ProjectFilter{}, tc.narrowed)
+				if err != nil {
+					t.Fatalf("Collect() unexpected error: %v", err)
+				}
+
+				if diff := cmp.Diff(map[string]string{"#1": "Repo project"}, projectNames(rows)); diff != "" {
+					t.Errorf("issue → project mismatch (-want +got):\n%s", diff)
+				}
+				if diff := cmp.Diff(tc.want, reportErrors, cmpopts.EquateEmpty()); diff != "" {
+					t.Errorf("Collect() errors mismatch (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
+
+	t.Run("error path", func(t *testing.T) {
+		t.Run("every provider failing returns an error naming each, with no rows", func(t *testing.T) {
+			githubErr := errors.New("github is down")
+			linearErr := errors.New("linear is down")
+			collector := NewCollector(
+				&fakeNotion{projects: []shared.Project{githubProject, linearProject}},
+				[]sync.Provider{
+					&fakeProvider{name: shared.ProviderGithub, err: githubErr},
+					&fakeProvider{name: shared.ProviderLinear, err: linearErr},
+				},
+			)
+
+			rows, reportErrors, err := collector.Collect(context.Background(), shared.ProjectFilter{}, false)
+
+			if !errors.Is(err, githubErr) {
+				t.Errorf("Collect() error = %v, want it to wrap %v", err, githubErr)
+			}
+			if !errors.Is(err, linearErr) {
+				t.Errorf("Collect() error = %v, want it to wrap %v", err, linearErr)
+			}
+			if rows != nil || reportErrors != nil {
+				t.Errorf("Collect() = %+v, %+v alongside the error, want nil, nil", rows, reportErrors)
+			}
+		})
 	})
 }

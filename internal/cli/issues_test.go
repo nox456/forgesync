@@ -166,6 +166,28 @@ func TestIssuesCommand(t *testing.T) {
 			}
 		})
 
+		t.Run("every provider failing returns an error naming each and prints nothing", func(t *testing.T) {
+			githubErr := errors.New("github is down")
+			linearErr := errors.New("linear is down")
+			useProviders(t, bothTokens, map[shared.Provider]sync.Provider{
+				shared.ProviderGithub: &fakeProvider{name: shared.ProviderGithub, err: githubErr},
+				shared.ProviderLinear: &fakeProvider{name: shared.ProviderLinear, err: linearErr},
+			}, providerFlags{})
+			printer := usePrinter(t)
+
+			err := runIssues(t)
+
+			if !errors.Is(err, githubErr) {
+				t.Errorf("issues RunE error = %v, want it to wrap %v", err, githubErr)
+			}
+			if !errors.Is(err, linearErr) {
+				t.Errorf("issues RunE error = %v, want it to wrap %v", err, linearErr)
+			}
+			if printer.printed {
+				t.Errorf("issues were printed although every provider failed")
+			}
+		})
+
 		t.Run("a flag conflict fails before any provider is fetched", func(t *testing.T) {
 			github := &fakeProvider{name: shared.ProviderGithub}
 			linear := &fakeProvider{name: shared.ProviderLinear}

@@ -104,6 +104,17 @@ func githubProject(pageID, repo string) shared.Project {
 	return shared.Project{PageID: pageID, Name: repo, Repo: repo, Provider: shared.ProviderGithub}
 }
 
+// linearIssue builds the issue the Linear adapter returns for an identifier,
+// team key and workflow state type.
+func linearIssue(identifier, team, state string) shared.Issue {
+	return shared.Issue{Provider: shared.ProviderLinear, Identifier: identifier, Scope: team, State: state}
+}
+
+// linearProject builds a Notion project bound to a Linear team key.
+func linearProject(pageID, teamKey string) shared.Project {
+	return shared.Project{PageID: pageID, Name: teamKey, TeamKey: teamKey, Provider: shared.ProviderLinear}
+}
+
 // storyFor builds the Notion story a project returns for a given issue
 // identifier.
 func storyFor(identifier string) shared.Story {
@@ -817,4 +828,301 @@ func TestEngineRunForwardsFilters(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A failing provider is reported and skipped (D2): the other provider's issues
+// still sync and Run returns a report, not an error.
+func TestEngineRunIsolatesProviderFailures(t *testing.T) {
+	quietLogs(t)
+
+	failing := func(provider *fakeProvider, message string) *fakeProvider {
+		provider.err = errors.New(message)
+		return provider
+	}
+
+	cases := []struct {
+		name         string
+		providers    []Provider
+		want         *Report
+		wantUpserted []string
+	}{
+		// happy path
+		{
+			name: "GitHub still syncs when Linear fails",
+			providers: []Provider{
+				fakeGithub(githubIssue("#1", "owner/repo")),
+				failing(fakeLinear(), "linear api 401: Authentication required"),
+			},
+			want: &Report{
+				Created: 1,
+				Errors:  []ReportError{{Provider: shared.ProviderLinear, Error: "linear api 401: Authentication required"}},
+			},
+			wantUpserted: []string{"#1"},
+		},
+		// edge cases
+		{
+			name: "Linear still syncs when GitHub, fetched first, fails",
+			providers: []Provider{
+				failing(fakeGithub(), "github is down"),
+				fakeLinear(linearIssue("ENG-1", "ENG", "started")),
+			},
+			want: &Report{
+				Created: 1,
+				Errors:  []ReportError{{Provider: shared.ProviderGithub, Error: "github is down"}},
+			},
+			wantUpserted: []string{"ENG-1"},
+		},
+		// error path
+		{
+			name: "every provider failing is reported once each and nothing is upserted",
+			providers: []Provider{
+				failing(fakeGithub(), "github is down"),
+				failing(fakeLinear(), "linear is down"),
+			},
+			want: &Report{Errors: []ReportError{
+				{Provider: shared.ProviderGithub, Error: "github is down"},
+				{Provider: shared.ProviderLinear, Error: "linear is down"},
+			}},
+			wantUpserted: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := &fakeNotion{
+				projects: []shared.Project{githubProject("p-gh", "owner/repo"), linearProject("p-lin", "ENG")},
+				upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+					return created(), nil
+				},
+			}
+
+			got, err := NewEngine(n, tc.providers).Run(context.Background(), EngineRunOptions{})
+			if err != nil {
+				t.Fatalf("Run() unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+			}
+			upserted := make([]string, 0, len(n.calls))
+			for _, call := range n.calls {
+				upserted = append(upserted, call.storyInput.Issue)
+			}
+			if diff := cmp.Diff(tc.wantUpserted, upserted, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("upserted issues mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// When a flag narrows the run (O4), projects of the providers left out are
+// skipped without an error and without loading their stories.
+func TestEngineRunNarrowedSkipsOtherProvidersQuietly(t *testing.T) {
+	quietLogs(t)
+
+	t.Run("happy path", func(t *testing.T) {
+		t.Run("a Linear project on a GitHub-only narrowed run is skipped without an error", func(t *testing.T) {
+			n := &fakeNotion{
+				projects: []shared.Project{githubProject("p-gh", "owner/repo"), linearProject("p-lin", "ENG")},
+				upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+					return created(), nil
+				},
+			}
+			engine := NewEngine(n, []Provider{fakeGithub(githubIssue("#1", "owner/repo"))})
+
+			got, err := engine.Run(context.Background(), EngineRunOptions{ProvidersNarrowed: true})
+			if err != nil {
+				t.Fatalf("Run() unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(&Report{Created: 1}, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff([]string{"p-gh"}, n.storiesRequested); diff != "" {
+				t.Errorf("stories loaded for (-want +got):\n%s", diff)
+			}
+		})
+
+		t.Run("a GitHub project on a Linear-only narrowed run is skipped without an error", func(t *testing.T) {
+			n := &fakeNotion{
+				projects: []shared.Project{githubProject("p-gh", "owner/repo"), linearProject("p-lin", "ENG")},
+				upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+					return created(), nil
+				},
+			}
+			engine := NewEngine(n, []Provider{fakeLinear(linearIssue("ENG-1", "ENG", "started"))})
+
+			got, err := engine.Run(context.Background(), EngineRunOptions{Team: "ENG", ProvidersNarrowed: true})
+			if err != nil {
+				t.Fatalf("Run() unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(&Report{Created: 1}, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff([]string{"p-lin"}, n.storiesRequested); diff != "" {
+				t.Errorf("stories loaded for (-want +got):\n%s", diff)
+			}
+		})
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		t.Run("narrowing still reports projects with no provider or an unknown one", func(t *testing.T) {
+			n := &fakeNotion{
+				projects: []shared.Project{
+					githubProject("p-gh", "owner/repo"),
+					{PageID: "p-empty", Name: "Empty", Repo: "owner/other"},
+					{PageID: "p-typo", Name: "Typo", Repo: "owner/other", Provider: "gitlab"},
+					linearProject("p-lin", "ENG"),
+				},
+				upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+					return created(), nil
+				},
+			}
+			engine := NewEngine(n, []Provider{fakeGithub()})
+
+			got, err := engine.Run(context.Background(), EngineRunOptions{ProvidersNarrowed: true})
+			if err != nil {
+				t.Fatalf("Run() unexpected error: %v", err)
+			}
+
+			want := []ReportError{
+				{Project: "Empty", Error: "project has no provider"},
+				{Project: "Typo", Error: `unknown provider "gitlab"`},
+			}
+			if diff := cmp.Diff(want, got.Errors); diff != "" {
+				t.Errorf("Run() errors mismatch (-want +got):\n%s", diff)
+			}
+		})
+	})
+
+	// error path: none — skipping a project can't fail; Notion errors are
+	// covered by TestEngineRunListProjectsError and TestEngineRunListStoriesError.
+}
+
+// Linear issues go through the engine with Linear's status rules: a manual
+// status is overwritten (D7), and Finished Date comes only from completedAt.
+func TestEngineRunAppliesLinearRules(t *testing.T) {
+	quietLogs(t)
+
+	updatedAt := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
+	completedAt := time.Date(2026, 11, 4, 17, 30, 0, 0, time.UTC)
+
+	issueIn := func(state string) shared.Issue {
+		issue := linearIssue("ENG-1", "ENG", state)
+		issue.Title = "Plan the rollout"
+		issue.UpdatedAt = updatedAt
+		return issue
+	}
+	// storyAt returns a story matching issue in every field IsSynced compares
+	// except its status, so the status alone decides whether the engine writes.
+	storyAt := func(issue shared.Issue, status string) shared.Story {
+		story := syncedStoryFor(issue)
+		story.Status = status
+		return story
+	}
+
+	backlog := issueIn("backlog")
+	started := issueIn("started")
+	canceled := issueIn("canceled")
+	completed := issueIn("completed")
+	completed.ClosedAt = &completedAt
+
+	type written struct {
+		Project      string
+		Status       string
+		FinishedDate string
+	}
+
+	cases := []struct {
+		name    string
+		teamKey string
+		issue   shared.Issue
+		stories []shared.Story
+		want    written
+	}{
+		// happy path
+		{
+			name:    "a manual in progress is overwritten with the backlog issue's not started",
+			teamKey: "ENG",
+			issue:   backlog,
+			stories: []shared.Story{storyAt(backlog, "In progress")},
+			want:    written{Project: "p-lin", Status: "Not started"},
+		},
+		{
+			name:    "a completed issue is written as done with its completion date",
+			teamKey: "ENG",
+			issue:   completed,
+			want:    written{Project: "p-lin", Status: "Done", FinishedDate: "2026-11-04 17:30"},
+		},
+		// edge cases
+		{
+			name:    "a manual done is overwritten when the issue is started again",
+			teamKey: "ENG",
+			issue:   started,
+			stories: []shared.Story{storyAt(started, "Done")},
+			want:    written{Project: "p-lin", Status: "In progress"},
+		},
+		{
+			name:    "a canceled issue without a completion date has no finished date",
+			teamKey: "ENG",
+			issue:   canceled,
+			want:    written{Project: "p-lin", Status: "Cancelled"},
+		},
+		{
+			name:    "an issue from team ENG matches a project whose team key is eng",
+			teamKey: "eng",
+			issue:   backlog,
+			want:    written{Project: "p-lin", Status: "Not started"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			n := &fakeNotion{
+				projects: []shared.Project{linearProject("p-lin", tc.teamKey)},
+				stories:  map[string][]shared.Story{"p-lin": tc.stories},
+				upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+					return updated(), nil
+				},
+			}
+
+			if _, err := NewEngine(n, []Provider{fakeLinear(tc.issue)}).Run(context.Background(), EngineRunOptions{}); err != nil {
+				t.Fatalf("Run() unexpected error: %v", err)
+			}
+
+			if len(n.calls) != 1 {
+				t.Fatalf("UpsertStory called %d times, want 1", len(n.calls))
+			}
+			input := n.calls[0].storyInput
+			got := written{Project: input.Project, Status: input.Status, FinishedDate: input.FinishedDate}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("story written mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+
+	// edge case: the override only writes when the status actually differs.
+	t.Run("a story already at the status the Linear state maps to is left unchanged", func(t *testing.T) {
+		n := &fakeNotion{
+			projects: []shared.Project{linearProject("p-lin", "ENG")},
+			stories:  map[string][]shared.Story{"p-lin": {storyAt(backlog, "Not started")}},
+			upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+				t.Fatalf("UpsertStory called for a story already at its Linear status")
+				return nil, nil
+			},
+		}
+
+		got, err := NewEngine(n, []Provider{fakeLinear(backlog)}).Run(context.Background(), EngineRunOptions{})
+		if err != nil {
+			t.Fatalf("Run() unexpected error: %v", err)
+		}
+
+		if diff := cmp.Diff(&Report{Unchanged: 1}, got, cmpopts.EquateEmpty()); diff != "" {
+			t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	// error path: none — an upsert failure is covered by
+	// TestEngineRunRecordsUpsertErrorsAndKeepsProcessing.
 }

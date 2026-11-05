@@ -56,6 +56,21 @@ func TestTextPrintReportErrors(t *testing.T) {
 				t.Errorf("PrintReport() output missing %q:\n%s", "* No provider: project has no provider", out)
 			}
 		})
+
+		t.Run("a provider error with no project or issue names the provider", func(t *testing.T) {
+			report := &sync.Report{Errors: []sync.ReportError{
+				{Provider: shared.ProviderLinear, Error: "linear api 401"},
+			}}
+
+			out := captureStdout(t, func() { NewTextPrinter().PrintReport(report) })
+
+			if !strings.Contains(out, "* linear: linear api 401") {
+				t.Errorf("PrintReport() output missing %q:\n%s", "* linear: linear api 401", out)
+			}
+			if strings.Contains(out, "* : ") {
+				t.Errorf("PrintReport() printed an error with an empty name:\n%s", out)
+			}
+		})
 	})
 
 	t.Run("edge cases", func(t *testing.T) {
@@ -142,4 +157,75 @@ func TestTextPrintTables(t *testing.T) {
 	})
 
 	// error path: none — the tables only format data they are given.
+}
+
+func TestTextPrintTableErrors(t *testing.T) {
+	projectName := "ForgeSync"
+
+	printers := []struct {
+		name  string
+		print func(reportErrors []sync.ReportError)
+	}{
+		{
+			name: "issues",
+			print: func(reportErrors []sync.ReportError) {
+				issues := []shared.Issue{{Provider: shared.ProviderGithub, Identifier: "#12", Scope: "owner/repo", Title: "FixTitle", State: "open"}}
+				NewTextPrinter().PrintIssues(issues, reportErrors)
+			},
+		},
+		{
+			name: "status",
+			print: func(reportErrors []sync.ReportError) {
+				rows := []status.Row{{Provider: shared.ProviderGithub, Identifier: "#12", ProjectName: &projectName, IssueTitle: "FixTitle", Status: "InPR"}}
+				NewTextPrinter().PrintStatus(rows, reportErrors)
+			},
+		},
+	}
+
+	t.Run("happy path", func(t *testing.T) {
+		reportErrors := []sync.ReportError{
+			{Provider: shared.ProviderLinear, Error: "linear api 401"},
+			{Project: "Team project", Provider: shared.ProviderLinear, Error: "linear token not configured"},
+		}
+
+		for _, p := range printers {
+			t.Run(p.name+" prints the errors after the table", func(t *testing.T) {
+				out := captureStdout(t, func() { p.print(reportErrors) })
+
+				if !strings.Contains(out, "* linear: linear api 401") {
+					t.Errorf("output missing %q:\n%s", "* linear: linear api 401", out)
+				}
+				if !strings.Contains(out, "* Team project: linear token not configured") {
+					t.Errorf("output missing %q:\n%s", "* Team project: linear token not configured", out)
+				}
+				if row, section := strings.Index(out, "#12"), strings.Index(out, "Errors:"); section < row {
+					t.Errorf("errors section at %d, want it after the table row at %d:\n%s", section, row, out)
+				}
+			})
+		}
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		empties := []struct {
+			name         string
+			reportErrors []sync.ReportError
+		}{
+			{name: "nil errors", reportErrors: nil},
+			{name: "an empty errors slice", reportErrors: []sync.ReportError{}},
+		}
+
+		for _, p := range printers {
+			for _, empty := range empties {
+				t.Run(p.name+" prints no errors section for "+empty.name, func(t *testing.T) {
+					out := captureStdout(t, func() { p.print(empty.reportErrors) })
+
+					if strings.Contains(out, "Errors:") {
+						t.Errorf("printed an errors section without errors:\n%s", out)
+					}
+				})
+			}
+		}
+	})
+
+	// error path: none — the printers only format data they are given.
 }

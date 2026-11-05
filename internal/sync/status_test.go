@@ -117,3 +117,70 @@ func TestComputeStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeStatusLinear(t *testing.T) {
+	linear := func(state string, hasLinkedPR bool) shared.Issue {
+		return shared.Issue{Provider: shared.ProviderLinear, State: state, HasLinkedPR: hasLinkedPR}
+	}
+
+	cases := []struct {
+		name           string
+		issue          shared.Issue
+		previousStatus string
+		want           string
+	}{
+		// happy path: one case per row of the plan's mapping table
+		{name: "backlog is not started", issue: linear("backlog", false), want: "Not started"},
+		{name: "unstarted is not started", issue: linear("unstarted", false), want: "Not started"},
+		{name: "started with a linked PR is in PR", issue: linear("started", true), want: "In PR"},
+		{name: "started without a linked PR is in progress", issue: linear("started", false), want: "In progress"},
+		{name: "completed is done", issue: linear("completed", false), want: "Done"},
+		{name: "canceled is cancelled", issue: linear("canceled", false), want: "Cancelled"},
+		// edge cases: the previous status never carries over (D7)
+		{
+			name:           "started overrides a previous done instead of keeping it",
+			issue:          linear("started", false),
+			previousStatus: "Done",
+			want:           "In progress",
+		},
+		{
+			name:           "completed overrides a previous cancelled instead of keeping it",
+			issue:          linear("completed", false),
+			previousStatus: "Cancelled",
+			want:           "Done",
+		},
+		{
+			name:           "backlog overrides a manual in progress",
+			issue:          linear("backlog", false),
+			previousStatus: "In progress",
+			want:           "Not started",
+		},
+		{
+			name:           "canceled overrides a previous done",
+			issue:          linear("canceled", false),
+			previousStatus: "Done",
+			want:           "Cancelled",
+		},
+		{
+			name:           "started with a linked PR overrides a previous not started",
+			issue:          linear("started", true),
+			previousStatus: "Not started",
+			want:           "In PR",
+		},
+		{name: "a linked PR does not matter once completed", issue: linear("completed", true), want: "Done"},
+		{name: "a linked PR does not matter while unstarted", issue: linear("unstarted", true), want: "Not started"},
+		{name: "an unknown state is not started", issue: linear("triage", true), previousStatus: "In PR", want: "Not started"},
+		{name: "an empty state is not started", issue: linear("", false), want: "Not started"},
+		{name: "state types are matched exactly, not case-insensitively", issue: linear("Started", false), want: "Not started"},
+		// error path: none — the Linear rule is total; every state maps to a status.
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ComputeStatus(tc.issue, tc.previousStatus)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("ComputeStatus(%+v, %q) mismatch (-want +got):\n%s", tc.issue, tc.previousStatus, diff)
+			}
+		})
+	}
+}

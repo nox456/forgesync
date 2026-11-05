@@ -124,6 +124,26 @@ func TestJSONPrintIssues(t *testing.T) {
 				t.Errorf("PrintIssues() JSON mismatch (-want +got):\n%s", diff)
 			}
 		})
+
+		t.Run("each error becomes one object with only its own fields, next to the issues", func(t *testing.T) {
+			reportErrors := []sync.ReportError{
+				{Provider: shared.ProviderLinear, Error: "linear api 401"},
+				{Project: "Team project", Provider: shared.ProviderLinear, Error: "linear token not configured"},
+			}
+
+			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintIssues(nil, reportErrors) }))
+
+			want := map[string]any{
+				"issues": []any{},
+				"errors": []any{
+					map[string]any{"provider": "linear", "message": "linear api 401"},
+					map[string]any{"project": "Team project", "provider": "linear", "message": "linear token not configured"},
+				},
+			}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("PrintIssues() JSON mismatch (-want +got):\n%s", diff)
+			}
+		})
 	})
 
 	t.Run("edge cases", func(t *testing.T) {
@@ -169,6 +189,26 @@ func TestJSONPrintStatus(t *testing.T) {
 					"provider":     "github",
 				}},
 				"errors": []any{},
+			}
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("PrintStatus() JSON mismatch (-want +got):\n%s", diff)
+			}
+		})
+
+		t.Run("each error becomes one object with only its own fields, next to the rows", func(t *testing.T) {
+			reportErrors := []sync.ReportError{
+				{Provider: shared.ProviderLinear, Error: "linear api 401"},
+				{Project: "No provider", Error: "project has no provider"},
+			}
+
+			got := decode(t, captureStdout(t, func() { NewJSONPrinter().PrintStatus(nil, reportErrors) }))
+
+			want := map[string]any{
+				"rows": []any{},
+				"errors": []any{
+					map[string]any{"provider": "linear", "message": "linear api 401"},
+					map[string]any{"project": "No provider", "message": "project has no provider"},
+				},
 			}
 			if diff := cmp.Diff(want, got); diff != "" {
 				t.Errorf("PrintStatus() JSON mismatch (-want +got):\n%s", diff)
