@@ -23,11 +23,10 @@ var updateCmd = &cobra.Command{
 	Annotations: map[string]string{
 		"group": "internal",
 	},
-	Short:         "Update ForgeSync to the latest version",
-	Args:          cobra.NoArgs,
-	SilenceErrors: true,
-	SilenceUsage:  true,
-	RunE:          runUpdate,
+	Short:        "Update ForgeSync to the latest version",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE:         runUpdate,
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
