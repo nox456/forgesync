@@ -47,7 +47,7 @@ update `teamKey` by hand: until you do, that Project's issues are skipped.
 | `Finished Date`  | Date         | yes      | Set when the issue is closed (GitHub) or completed (Linear)  |
 | `Project`        | Relation     | yes      | Relation to Project Manager (limit 1)                        |
 | `Created time`   | Created time | yes      | Auto-managed by Notion                                       |
-| `Prioridad`      | Select       | optional | User-managed; never touched by sync                          |
+| `Priority`       | Select       | optional | User-managed; never touched by sync                          |
 
 The `Status` options must exist with exactly those names — Notion rejects a
 write to an option it doesn't know, so a database missing `In PR` fails on the

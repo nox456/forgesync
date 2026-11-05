@@ -103,7 +103,7 @@ issue, drafts included.
   once the issue closes, or from Linear's `completedAt` once it's completed. A
   canceled Linear issue never gets one.
 - `Created time`, which Notion manages, and any property not listed above
-  (e.g. `Prioridad` — you own it in Notion)
+  (e.g. `Priority` — you own it in Notion)
 
 ---
 
