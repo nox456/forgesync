@@ -37,7 +37,7 @@ var Providers map[shared.Provider]sync.Provider
 
 var rootCmd = &cobra.Command{
 	Use:   "forgesync",
-	Short: "ForgeSync is a CLI tool for syncing Notion databases with GitHub repositories",
+	Short: "ForgeSync is a CLI tool for syncing your GitHub and Linear issues into Notion databases",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if Verbose {
 			slog.SetLogLoggerLevel(slog.LevelDebug)
