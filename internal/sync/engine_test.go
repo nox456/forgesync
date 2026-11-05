@@ -287,9 +287,9 @@ func TestEngineRunClassifiesProjects(t *testing.T) {
 				wantErrors: []ReportError{{Project: "Typo", Error: `unknown provider "gitlab"`}},
 			},
 			{
-				name:       "a provider the engine was not given is skipped silently",
+				name:       "a provider the engine was not given is reported as not configured",
 				project:    shared.Project{PageID: "p-bad", Name: "Linear team", TeamKey: "ENG", Provider: shared.ProviderLinear},
-				wantErrors: nil,
+				wantErrors: []ReportError{{Project: "Linear team", Provider: shared.ProviderLinear, Error: "linear token not configured"}},
 			},
 		}
 
@@ -631,11 +631,13 @@ func TestEngineRunFetchIssuesError(t *testing.T) {
 	)
 
 	report, err := engine.Run(context.Background(), EngineRunOptions{})
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("Run() error = %v, want %v", err, wantErr)
+	if err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
 	}
-	if report != nil {
-		t.Errorf("Run() report = %+v, want nil", report)
+
+	want := &Report{Errors: []ReportError{{Provider: shared.ProviderGithub, Error: wantErr.Error()}}}
+	if diff := cmp.Diff(want, report, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
 	}
 }
 

@@ -85,8 +85,10 @@ func (p *TextPrinter) PrintReport(report *sync.Report) {
 			switch {
 			case error.Identifier != "":
 				fmt.Printf("* %s %s: %s\n", error.Provider, error.Identifier, error.Error)
-			default:
+			case error.Project != "":
 				fmt.Printf("* %s: %s\n", error.Project, error.Error)
+			default:
+				fmt.Printf("* %s: %s\n", error.Provider, error.Error)
 			}
 		}
 	}

@@ -75,33 +75,12 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		return nil, err
 	}
 
-	errors := make([]ReportError, 0)
+	eligible, errors := ClassifyProjects(projects, e.Providers, options.ProvidersNarrowed)
 
-	projectsLookup := make(map[projectKey]shared.Project, len(projects))
+	projectsLookup := make(map[projectKey]shared.Project, len(eligible))
 
-	for _, project := range projects {
-		if project.Provider == "" {
-			errors = append(errors, ReportError{
-				Project: project.Name,
-				Error:   "project has no provider",
-			})
-			continue
-		}
-
-		if project.Provider != shared.ProviderGithub && project.Provider != shared.ProviderLinear {
-			errors = append(errors, ReportError{
-				Project: project.Name,
-				Error:   fmt.Sprintf("unknown provider %q", project.Provider),
-			})
-			continue
-		}
-
-		for _, provider := range e.Providers {
-			if project.Provider == provider.Name() {
-				projectsLookup[projectKey{project.Provider, strings.ToLower(project.GetScope())}] = project
-				break
-			}
-		}
+	for _, project := range eligible {
+		projectsLookup[projectKey{project.Provider, strings.ToLower(project.GetScope())}] = project
 	}
 
 	created := 0
@@ -141,7 +120,12 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 		}
 		got, err := p.FetchAssignedIssues(ctx, f)
 		if err != nil {
-			return nil, err // Phase 4 turns this into a ReportError
+			slog.Error(err.Error())
+			errors = append(errors, ReportError{
+				Provider: p.Name(),
+				Error:    err.Error(),
+			})
+			continue
 		}
 		issues = append(issues, got...)
 	}
