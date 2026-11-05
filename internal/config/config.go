@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	GitHubToken      string
+	LinearToken      string
 	NotionToken      string
 	ProjectsSourceId string
 	StoriesSourceId  string
@@ -28,35 +29,20 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	var missingFields []string
-
-	// Validate required fields
-	if viper.GetString("github_token") == "" {
-		missingFields = append(missingFields, "github_token")
-	}
-
-	if viper.GetString("notion_token") == "" {
-		missingFields = append(missingFields, "notion_token")
-	}
-
-	if viper.GetString("projects_source_id") == "" {
-		missingFields = append(missingFields, "projects_source_id")
-	}
-
-	if viper.GetString("stories_source_id") == "" {
-		missingFields = append(missingFields, "stories_source_id")
-	}
-
-	if len(missingFields) > 0 {
-		return nil, fmt.Errorf("missing required fields: %s", missingFields)
-	}
-
-	return &Config{
+	config := Config{
 		GitHubToken:      viper.GetString("github_token"),
+		LinearToken:      viper.GetString("linear_token"),
 		NotionToken:      viper.GetString("notion_token"),
 		ProjectsSourceId: viper.GetString("projects_source_id"),
 		StoriesSourceId:  viper.GetString("stories_source_id"),
-	}, nil
+	}
+
+	err = validate(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
 
 func ShouldLoadConfig(cmd *cobra.Command) bool {
@@ -67,4 +53,31 @@ func ShouldLoadConfig(cmd *cobra.Command) bool {
 	}
 
 	return true
+}
+
+func validate(config Config) error {
+	var missingFields []string
+
+	// Validate required fields
+	if config.GitHubToken == "" && config.LinearToken == "" {
+		return fmt.Errorf("at least one of github_token, linear_token is required")
+	}
+
+	if config.NotionToken == "" {
+		missingFields = append(missingFields, "notion_token")
+	}
+
+	if config.ProjectsSourceId == "" {
+		missingFields = append(missingFields, "projects_source_id")
+	}
+
+	if config.StoriesSourceId == "" {
+		missingFields = append(missingFields, "stories_source_id")
+	}
+
+	if len(missingFields) > 0 {
+		return fmt.Errorf("missing required fields: %s", missingFields)
+	}
+
+	return nil
 }
