@@ -20,7 +20,7 @@ var issuesCmd = &cobra.Command{
 	Use:   "issues",
 	Short: "List your assigned GitHub and Linear issues",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		providers, resolved, err := getActiveProviders(true)
+		providers, resolved, err := getActiveProviders()
 		if err != nil {
 			return err
 		}

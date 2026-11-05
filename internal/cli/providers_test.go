@@ -245,7 +245,7 @@ func TestGetActiveProviders(t *testing.T) {
 			}
 			useProviders(t, bothTokens, clients, providerFlags{})
 
-			providers, resolved, err := getActiveProviders(true)
+			providers, resolved, err := getActiveProviders()
 			if err != nil {
 				t.Fatalf("getActiveProviders() unexpected error: %v", err)
 			}
@@ -266,7 +266,7 @@ func TestGetActiveProviders(t *testing.T) {
 			}
 			useProviders(t, bothTokens, clients, providerFlags{repo: "owner/name"})
 
-			providers, resolved, err := getActiveProviders(true)
+			providers, resolved, err := getActiveProviders()
 			if err != nil {
 				t.Fatalf("getActiveProviders() unexpected error: %v", err)
 			}
@@ -279,23 +279,47 @@ func TestGetActiveProviders(t *testing.T) {
 				t.Errorf("resolved mismatch (-want +got):\n%s", diff)
 			}
 		})
-	})
 
-	t.Run("edge cases", func(t *testing.T) {
-		t.Run("without Linear, a run with both tokens skips Linear", func(t *testing.T) {
+		t.Run("--team returns only the Linear client and the team filter", func(t *testing.T) {
+			linear := &fakeProvider{name: shared.ProviderLinear}
 			clients := map[shared.Provider]sync.Provider{
 				shared.ProviderGithub: &fakeProvider{name: shared.ProviderGithub},
-				shared.ProviderLinear: &fakeProvider{name: shared.ProviderLinear},
+				shared.ProviderLinear: linear,
 			}
-			useProviders(t, bothTokens, clients, providerFlags{})
+			useProviders(t, bothTokens, clients, providerFlags{team: "ENG"})
 
-			providers, _, err := getActiveProviders(false)
+			providers, resolved, err := getActiveProviders()
 			if err != nil {
 				t.Fatalf("getActiveProviders() unexpected error: %v", err)
 			}
 
-			if diff := cmp.Diff([]shared.Provider{shared.ProviderGithub}, names(providers)); diff != "" {
+			if len(providers) != 1 || providers[0] != linear {
+				t.Errorf("providers = %v, want only the Linear client from the map", names(providers))
+			}
+			want := &resolvedProviders{Active: []shared.Provider{shared.ProviderLinear}, TeamKey: "ENG", Narrowed: true}
+			if diff := cmp.Diff(want, resolved); diff != "" {
+				t.Errorf("resolved mismatch (-want +got):\n%s", diff)
+			}
+		})
+	})
+
+	t.Run("edge cases", func(t *testing.T) {
+		t.Run("only a Linear token returns just the Linear client, not narrowed", func(t *testing.T) {
+			clients := map[shared.Provider]sync.Provider{
+				shared.ProviderLinear: &fakeProvider{name: shared.ProviderLinear},
+			}
+			useProviders(t, &config.Config{LinearToken: "lin-token"}, clients, providerFlags{})
+
+			providers, resolved, err := getActiveProviders()
+			if err != nil {
+				t.Fatalf("getActiveProviders() unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff([]shared.Provider{shared.ProviderLinear}, names(providers)); diff != "" {
 				t.Errorf("providers mismatch (-want +got):\n%s", diff)
+			}
+			if resolved.Narrowed {
+				t.Errorf("Narrowed = true, want false for a run without flags")
 			}
 		})
 	})
@@ -313,23 +337,6 @@ func TestGetActiveProviders(t *testing.T) {
 				flags:   providerFlags{provider: "jira"},
 				wantErr: `unknown provider "jira"`,
 			},
-			{
-				name:    "without Linear, --provider linear is refused until Phase 4",
-				cfg:     bothTokens,
-				flags:   providerFlags{provider: "linear"},
-				wantErr: "not supported by sync and status until Phase 4",
-			},
-			{
-				name:    "without Linear, --team is refused until Phase 4",
-				cfg:     bothTokens,
-				flags:   providerFlags{team: "ENG"},
-				wantErr: "not supported by sync and status until Phase 4",
-			},
-			{
-				name:    "without Linear, only a Linear token is refused until Phase 4",
-				cfg:     &config.Config{LinearToken: "lin-token"},
-				wantErr: "not supported by sync and status until Phase 4",
-			},
 		}
 
 		for _, tc := range cases {
@@ -340,7 +347,7 @@ func TestGetActiveProviders(t *testing.T) {
 				}
 				useProviders(t, tc.cfg, clients, tc.flags)
 
-				providers, resolved, err := getActiveProviders(false)
+				providers, resolved, err := getActiveProviders()
 
 				if err == nil {
 					t.Fatalf("getActiveProviders() = %v, %+v, want an error containing %q", names(providers), resolved, tc.wantErr)
@@ -375,9 +382,10 @@ func useOfflineNotion(t *testing.T) {
 	NotionClient = &notion.Client{HTTP: &http.Client{Transport: offlineTransport{}}}
 }
 
-func TestSyncAndStatusRefuseLinear(t *testing.T) {
-	// happy path: none — a run that passes the guard goes on to Notion; the
-	// guard skipping Linear on such a run is covered by TestGetActiveProviders.
+func TestSyncAndStatusAcceptLinear(t *testing.T) {
+	// Past provider resolution the commands need Notion, which these tests
+	// never reach; the engine and collector tests cover the rest of the run.
+	// error path: none — resolution errors are covered by TestGetActiveProviders.
 	bothTokens := &config.Config{GitHubToken: "gh-token", LinearToken: "lin-token"}
 	linearOnly := &config.Config{LinearToken: "lin-token"}
 
@@ -387,22 +395,21 @@ func TestSyncAndStatusRefuseLinear(t *testing.T) {
 		cfg   *config.Config
 		flags providerFlags
 	}{
-		// edge cases: Linear is the only provider configured
-		{name: "sync with only a Linear token", cmd: syncCmd, cfg: linearOnly},
-		{name: "status with only a Linear token", cmd: statusCmd, cfg: linearOnly},
-		// error path: Linear asked for by name
+		// happy path: Linear asked for by name
 		{name: "sync --provider linear", cmd: syncCmd, cfg: bothTokens, flags: providerFlags{provider: "linear"}},
 		{name: "sync --team ENG", cmd: syncCmd, cfg: bothTokens, flags: providerFlags{team: "ENG"}},
 		{name: "status --provider linear", cmd: statusCmd, cfg: bothTokens, flags: providerFlags{provider: "linear"}},
 		{name: "status --team ENG", cmd: statusCmd, cfg: bothTokens, flags: providerFlags{team: "ENG"}},
+		// edge cases: Linear is the only provider configured
+		{name: "sync with only a Linear token", cmd: syncCmd, cfg: linearOnly},
+		{name: "status with only a Linear token", cmd: statusCmd, cfg: linearOnly},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name+" is refused until Phase 4", func(t *testing.T) {
-			linear := &fakeProvider{name: shared.ProviderLinear}
+		t.Run(tc.name+" gets past provider resolution to Notion", func(t *testing.T) {
 			useProviders(t, tc.cfg, map[shared.Provider]sync.Provider{
 				shared.ProviderGithub: &fakeProvider{name: shared.ProviderGithub},
-				shared.ProviderLinear: linear,
+				shared.ProviderLinear: &fakeProvider{name: shared.ProviderLinear},
 			}, tc.flags)
 			useOfflineNotion(t)
 			usePrinter(t)
@@ -410,11 +417,8 @@ func TestSyncAndStatusRefuseLinear(t *testing.T) {
 			tc.cmd.SetContext(context.Background())
 			err := tc.cmd.RunE(tc.cmd, nil)
 
-			if err == nil || !strings.Contains(err.Error(), "not supported by sync and status until Phase 4") {
-				t.Errorf("%s RunE error = %v, want the Phase 4 refusal", tc.cmd.Name(), err)
-			}
-			if linear.fetched {
-				t.Errorf("Linear was fetched by %s, want it refused before any fetch", tc.cmd.Name())
+			if err == nil || !strings.Contains(err.Error(), "offline: tests never reach Notion") {
+				t.Errorf("%s RunE error = %v, want the offline Notion error", tc.cmd.Name(), err)
 			}
 		})
 	}

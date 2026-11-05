@@ -19,7 +19,7 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Sync Notion stories with GitHub issues (use --dry-run to see what would be changed without actually changing anything)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		providers, resolved, err := getActiveProviders(false)
+		providers, resolved, err := getActiveProviders()
 		if err != nil {
 			return err
 		}
