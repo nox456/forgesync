@@ -241,7 +241,7 @@ func TestGetActiveProviders(t *testing.T) {
 			}
 			useProviders(t, bothTokens, clients, providerFlags{})
 
-			providers, resolved, err := getActiveProviders()
+			providers, resolved, err := getActiveProviders(true)
 			if err != nil {
 				t.Fatalf("getActiveProviders() unexpected error: %v", err)
 			}
@@ -262,7 +262,7 @@ func TestGetActiveProviders(t *testing.T) {
 			}
 			useProviders(t, bothTokens, clients, providerFlags{repo: "owner/name"})
 
-			providers, resolved, err := getActiveProviders()
+			providers, resolved, err := getActiveProviders(true)
 			if err != nil {
 				t.Fatalf("getActiveProviders() unexpected error: %v", err)
 			}
@@ -278,13 +278,14 @@ func TestGetActiveProviders(t *testing.T) {
 	})
 
 	t.Run("edge cases", func(t *testing.T) {
-		t.Run("without a Linear client a run with both tokens skips Linear", func(t *testing.T) {
+		t.Run("without Linear, a run with both tokens skips Linear", func(t *testing.T) {
 			clients := map[shared.Provider]sync.Provider{
 				shared.ProviderGithub: &fakeProvider{name: shared.ProviderGithub},
+				shared.ProviderLinear: &fakeProvider{name: shared.ProviderLinear},
 			}
 			useProviders(t, bothTokens, clients, providerFlags{})
 
-			providers, _, err := getActiveProviders()
+			providers, _, err := getActiveProviders(false)
 			if err != nil {
 				t.Fatalf("getActiveProviders() unexpected error: %v", err)
 			}
@@ -309,21 +310,21 @@ func TestGetActiveProviders(t *testing.T) {
 				wantErr: `unknown provider "jira"`,
 			},
 			{
-				name:    "--provider linear without a Linear client is not available yet",
+				name:    "without Linear, --provider linear is refused until Phase 4",
 				cfg:     bothTokens,
 				flags:   providerFlags{provider: "linear"},
-				wantErr: "linear provider not available yet",
+				wantErr: "not supported by sync and status until Phase 4",
 			},
 			{
-				name:    "--team without a Linear client is not available yet",
+				name:    "without Linear, --team is refused until Phase 4",
 				cfg:     bothTokens,
 				flags:   providerFlags{team: "ENG"},
-				wantErr: "linear provider not available yet",
+				wantErr: "not supported by sync and status until Phase 4",
 			},
 			{
-				name:    "only a Linear token, without a Linear client, is not available yet",
+				name:    "without Linear, only a Linear token is refused until Phase 4",
 				cfg:     &config.Config{LinearToken: "lin-token"},
-				wantErr: "linear provider not available yet",
+				wantErr: "not supported by sync and status until Phase 4",
 			},
 		}
 
@@ -331,10 +332,11 @@ func TestGetActiveProviders(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				clients := map[shared.Provider]sync.Provider{
 					shared.ProviderGithub: &fakeProvider{name: shared.ProviderGithub},
+					shared.ProviderLinear: &fakeProvider{name: shared.ProviderLinear},
 				}
 				useProviders(t, tc.cfg, clients, tc.flags)
 
-				providers, resolved, err := getActiveProviders()
+				providers, resolved, err := getActiveProviders(false)
 
 				if err == nil {
 					t.Fatalf("getActiveProviders() = %v, %+v, want an error containing %q", names(providers), resolved, tc.wantErr)

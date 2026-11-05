@@ -8,6 +8,7 @@ import (
 
 	"github.com/nox456/forgesync/internal/config"
 	"github.com/nox456/forgesync/internal/github"
+	"github.com/nox456/forgesync/internal/linear"
 	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/output"
 	"github.com/nox456/forgesync/internal/shared"
@@ -28,6 +29,7 @@ var TeamKey string
 
 var (
 	_ sync.Provider = (*github.Client)(nil)
+	_ sync.Provider = (*linear.Client)(nil)
 	_ sync.Notion   = (*notion.Client)(nil)
 	_ status.Notion = (*notion.Client)(nil)
 )
@@ -77,6 +79,10 @@ var rootCmd = &cobra.Command{
 			}
 
 			Providers[shared.ProviderGithub] = githubClient
+		}
+
+		if Config.LinearToken != "" {
+			Providers[shared.ProviderLinear] = linear.NewClient(Config.LinearToken)
 		}
 
 		NotionClient = notion.NewClient(Config.NotionToken, Config.ProjectsSourceId, Config.StoriesSourceId)

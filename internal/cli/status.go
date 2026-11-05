@@ -17,7 +17,7 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Compute status for a given issue",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		providers, resolved, err := getActiveProviders()
+		providers, resolved, err := getActiveProviders(false)
 		if err != nil {
 			return err
 		}

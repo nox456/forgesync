@@ -94,7 +94,7 @@ func resolveProviders(hasGithub bool, hasLinear bool, provider string, repo stri
 	}, nil
 }
 
-func getActiveProviders() ([]sync.Provider, *resolvedProviders, error) {
+func getActiveProviders(includeLinear bool) ([]sync.Provider, *resolvedProviders, error) {
 	resolved, err := resolveProviders(Config.GitHubToken != "", Config.LinearToken != "", ProviderName, RepoName, TeamKey)
 	if err != nil {
 		return nil, nil, err
@@ -103,18 +103,17 @@ func getActiveProviders() ([]sync.Provider, *resolvedProviders, error) {
 	providers := make([]sync.Provider, 0, len(resolved.Active))
 
 	for _, name := range resolved.Active {
-		client, ok := Providers[name]
-		if !ok {
-			// Only Linear has no client, until Phase 3 adds it
+		// TODO(phase-4): drop includeLinear once sync and status apply Linear's status rules
+		if name == shared.ProviderLinear && !includeLinear {
 			if resolved.Narrowed || len(resolved.Active) == 1 {
-				return nil, nil, fmt.Errorf("%s provider not available yet", name)
+				return nil, nil, fmt.Errorf("linear provider is not supported by sync and status until Phase 4")
 			}
 
-			slog.Debug(fmt.Sprintf("%s provider not available yet, skipping", name))
+			slog.Debug("linear provider is not supported by sync and status yet, skipping")
 			continue
 		}
 
-		providers = append(providers, client)
+		providers = append(providers, Providers[name])
 	}
 
 	return providers, resolved, nil
