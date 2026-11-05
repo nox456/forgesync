@@ -17,8 +17,9 @@ the schema:
   rejected issue is listed under `Errors`.
 
 Coming from v0.12.0? `Issue` changed from Number to Text, and Projects need
-the new `provider` and `teamKey` properties. The v1.0.0 release notes walk
-through the migration.
+the new `provider` and `teamKey` properties. The
+[v1.0.0 release notes](releases/v1.0.0.md#notion-schema) walk through the
+migration.
 
 ## Project Manager database
 

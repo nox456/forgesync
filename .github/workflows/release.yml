@@ -18,9 +18,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+      - name: Find release notes
+        id: notes
+        run: |
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          if [ -f "$notes" ]; then
+            echo "args=--release-header=$notes" >> "$GITHUB_OUTPUT"
+          fi
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean ${{ steps.notes.outputs.args }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
