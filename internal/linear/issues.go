@@ -82,7 +82,7 @@ func toIssue(node issueNode) shared.Issue {
 		Identifier: node.Identifier,
 		Title:      node.Title,
 		URL:        node.URL,
-		Body:       node.Description,
+		Body:       normalizeLinearBody(node.Description),
 		State:      node.State.Type,
 		Labels:     labels,
 		Scope:      node.Team.Key,

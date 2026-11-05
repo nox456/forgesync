@@ -15,8 +15,8 @@ type graphqlResponse struct {
 }
 
 type stringComparator struct {
-	Eq  string `json:"eq,omitempty"`
-	Neq string `json:"neq,omitempty"`
+	EqIgnoreCase string `json:"eqIgnoreCase,omitempty"`
+	Neq          string `json:"neq,omitempty"`
 }
 
 type dateComparator struct {
