@@ -35,3 +35,37 @@ func TestCommandsConfigExemption(t *testing.T) {
 		})
 	}
 }
+
+// hasFlag reports whether cmd accepts the flag, whether registered on cmd
+// itself or inherited from a parent's persistent flags.
+func hasFlag(cmd *cobra.Command, name string) bool {
+	return cmd.Flags().Lookup(name) != nil || cmd.InheritedFlags().Lookup(name) != nil
+}
+
+func TestProviderFlags(t *testing.T) {
+	// error path: none — flags are registered in init and can't fail at runtime.
+	cases := []struct {
+		name string
+		cmd  *cobra.Command
+		want bool
+	}{
+		// happy path: the provider commands accept the three flags
+		{name: "sync", cmd: syncCmd, want: true},
+		{name: "status", cmd: statusCmd, want: true},
+		{name: "issues", cmd: issuesCmd, want: true},
+		// edge cases: commands without providers reject them
+		{name: "projects", cmd: projectsCmd, want: false},
+		{name: "config", cmd: configCmd, want: false},
+		{name: "version", cmd: versionCmd, want: false},
+	}
+
+	for _, tc := range cases {
+		for _, flag := range []string{"provider", "repo", "team"} {
+			t.Run(tc.name+" --"+flag, func(t *testing.T) {
+				if got := hasFlag(tc.cmd, flag); got != tc.want {
+					t.Errorf("%s accepts --%s = %v, want %v", tc.name, flag, got, tc.want)
+				}
+			})
+		}
+	}
+}
