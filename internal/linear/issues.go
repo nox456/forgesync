@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/nox456/forgesync/internal/shared"
@@ -78,16 +79,27 @@ func toIssue(node issueNode) shared.Issue {
 	}
 
 	return shared.Issue{
-		Provider:   shared.ProviderLinear,
-		Identifier: node.Identifier,
-		Title:      node.Title,
-		URL:        node.URL,
-		Body:       normalizeLinearBody(node.Description),
-		State:      node.State.Type,
-		Labels:     labels,
-		Scope:      node.Team.Key,
-		UpdatedAt:  node.UpdatedAt,
-		CreatedAt:  node.CreatedAt,
-		ClosedAt:   node.CompletedAt,
+		Provider:    shared.ProviderLinear,
+		Identifier:  node.Identifier,
+		Title:       node.Title,
+		URL:         node.URL,
+		Body:        normalizeLinearBody(node.Description),
+		State:       node.State.Type,
+		Labels:      labels,
+		Scope:       node.Team.Key,
+		UpdatedAt:   node.UpdatedAt,
+		CreatedAt:   node.CreatedAt,
+		ClosedAt:    node.CompletedAt,
+		HasLinkedPR: hasLinkedPR(node.Attachments.Nodes),
 	}
+}
+
+func hasLinkedPR(attachments []attachmentNode) bool {
+	for _, attachment := range attachments {
+		if attachment.SourceType == "github" && strings.Contains(attachment.URL, "/pull/") {
+			return true
+		}
+	}
+
+	return false
 }
