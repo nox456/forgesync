@@ -2,13 +2,17 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/nox456/forgesync/internal/config"
+	"github.com/nox456/forgesync/internal/notion"
 	"github.com/nox456/forgesync/internal/shared"
 	"github.com/nox456/forgesync/internal/sync"
+	"github.com/spf13/cobra"
 )
 
 // fakeProvider is a sync.Provider whose name and issues are set by the test.
@@ -350,4 +354,68 @@ func TestGetActiveProviders(t *testing.T) {
 			})
 		}
 	})
+}
+
+// offlineTransport fails every request, so a command that gets past provider
+// resolution errors out instead of reaching Notion.
+type offlineTransport struct{}
+
+func (offlineTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("offline: tests never reach Notion")
+}
+
+// useOfflineNotion swaps NotionClient for one whose requests always fail
+// until the test ends.
+func useOfflineNotion(t *testing.T) {
+	t.Helper()
+
+	prev := NotionClient
+	t.Cleanup(func() { NotionClient = prev })
+
+	NotionClient = &notion.Client{HTTP: &http.Client{Transport: offlineTransport{}}}
+}
+
+func TestSyncAndStatusRefuseLinear(t *testing.T) {
+	// happy path: none — a run that passes the guard goes on to Notion; the
+	// guard skipping Linear on such a run is covered by TestGetActiveProviders.
+	bothTokens := &config.Config{GitHubToken: "gh-token", LinearToken: "lin-token"}
+	linearOnly := &config.Config{LinearToken: "lin-token"}
+
+	cases := []struct {
+		name  string
+		cmd   *cobra.Command
+		cfg   *config.Config
+		flags providerFlags
+	}{
+		// edge cases: Linear is the only provider configured
+		{name: "sync with only a Linear token", cmd: syncCmd, cfg: linearOnly},
+		{name: "status with only a Linear token", cmd: statusCmd, cfg: linearOnly},
+		// error path: Linear asked for by name
+		{name: "sync --provider linear", cmd: syncCmd, cfg: bothTokens, flags: providerFlags{provider: "linear"}},
+		{name: "sync --team ENG", cmd: syncCmd, cfg: bothTokens, flags: providerFlags{team: "ENG"}},
+		{name: "status --provider linear", cmd: statusCmd, cfg: bothTokens, flags: providerFlags{provider: "linear"}},
+		{name: "status --team ENG", cmd: statusCmd, cfg: bothTokens, flags: providerFlags{team: "ENG"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name+" is refused until Phase 4", func(t *testing.T) {
+			linear := &fakeProvider{name: shared.ProviderLinear}
+			useProviders(t, tc.cfg, map[shared.Provider]sync.Provider{
+				shared.ProviderGithub: &fakeProvider{name: shared.ProviderGithub},
+				shared.ProviderLinear: linear,
+			}, tc.flags)
+			useOfflineNotion(t)
+			usePrinter(t)
+
+			tc.cmd.SetContext(context.Background())
+			err := tc.cmd.RunE(tc.cmd, nil)
+
+			if err == nil || !strings.Contains(err.Error(), "not supported by sync and status until Phase 4") {
+				t.Errorf("%s RunE error = %v, want the Phase 4 refusal", tc.cmd.Name(), err)
+			}
+			if linear.fetched {
+				t.Errorf("Linear was fetched by %s, want it refused before any fetch", tc.cmd.Name())
+			}
+		})
+	}
 }
