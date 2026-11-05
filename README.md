@@ -211,7 +211,7 @@ plus at least one of `github_token` and `linear_token`.
 ```yaml
 # ~/.config/forgesync/config.yaml
 github_token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-linear_token: lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # either token, or both
+linear_token: lin_xxx_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # either token, or both
 notion_token: ntn_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 projects_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 stories_source_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
