@@ -4,36 +4,60 @@ import (
 	"github.com/nox456/forgesync/internal/shared"
 )
 
+const (
+	statusNotStarted = "Not started"
+	statusInProgress = "In progress"
+	statusInPR       = "In PR"
+	statusDone       = "Done"
+	statusCancelled  = "Cancelled"
+)
+
 func ComputeStatus(issue shared.Issue, previousStatus string) string {
 	switch issue.Provider {
-	case "github":
+	case shared.ProviderGithub:
 		return computeGithubStatus(issue, previousStatus)
-	case "linear":
-		return "Not started"
+	case shared.ProviderLinear:
+		return computeLinearStatus(issue)
 	}
 
-	return "Not started"
+	return statusNotStarted
 }
 
 func computeGithubStatus(issue shared.Issue, previousStatus string) string {
 	switch issue.State {
 	case "open":
-		if previousStatus == "" || previousStatus == "Not started" {
+		if previousStatus == "" || previousStatus == statusNotStarted {
 			if issue.HasLinkedPR {
-				return "In PR"
+				return statusInPR
 			}
-			return "Not started"
+			return statusNotStarted
 		}
-		if previousStatus == "In progress" && issue.HasLinkedPR {
-			return "In PR"
+		if previousStatus == statusInProgress && issue.HasLinkedPR {
+			return statusInPR
 		}
 		return previousStatus
 	case "closed":
-		if previousStatus == "Cancelled" {
-			return "Cancelled"
+		if previousStatus == statusCancelled {
+			return statusCancelled
 		}
-		return "Done"
+		return statusDone
 	}
 
-	return "Not started"
+	return statusNotStarted
+}
+
+func computeLinearStatus(issue shared.Issue) string {
+	switch issue.State {
+	case "started":
+		if issue.HasLinkedPR {
+			return statusInPR
+		}
+		return statusInProgress
+	case "completed":
+		return statusDone
+	case "canceled":
+		return statusCancelled
+	}
+
+	return statusNotStarted
 }
