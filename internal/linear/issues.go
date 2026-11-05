@@ -43,7 +43,7 @@ func (c *Client) FetchAssignedIssues(ctx context.Context, teamKey string) ([]sha
 	}
 
 	if teamKey != "" {
-		variables.Filter.Team = &teamFilter{Key: stringComparator{Eq: teamKey}}
+		variables.Filter.Team = &teamFilter{Key: stringComparator{EqIgnoreCase: teamKey}}
 	}
 
 	for {
