@@ -64,6 +64,14 @@ func (n *Notifier) Start() (*Refresh, error) {
 func (r *Refresh) Wait() error {
 	defer r.cancel()
 
+	// The deadline counts from Start, so after a command slower than the timeout both cases below
+	// are ready and select would pick one at random. A result that already arrived always wins.
+	select {
+	case res := <-r.done:
+		return r.save(res)
+	default:
+	}
+
 	select {
 	case res := <-r.done:
 		return r.save(res)

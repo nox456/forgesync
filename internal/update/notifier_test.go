@@ -314,6 +314,26 @@ func TestRefreshWait(t *testing.T) {
 		assertState(t, loadState(t, n.Store), State{LastCheckedAt: notifierNow, LatestVersion: "0.10.0", UpdateCheckInterval: "6h"})
 	})
 
+	// Wait runs after the command, so once a command outlasts the timeout both the result and the
+	// deadline are ready. The result must win every time, not on a coin flip.
+	t.Run("command slower than the timeout still saves a refresh that already finished", func(t *testing.T) {
+		for i := range 30 {
+			n, _ := newTestNotifier(t, "0.9.0", &fakeFinder{latest: "0.10.0"})
+			n.Timeout = 10 * time.Millisecond
+			seedState(t, n.Store, State{LastCheckedAt: stale, LatestVersion: "0.9.0", UpdateCheckInterval: "6h"})
+
+			refresh, err := n.Start()
+			if err != nil || refresh == nil {
+				t.Fatalf("Start() = %v, %v, want a refresh and no error", refresh, err)
+			}
+			time.Sleep(2 * n.Timeout)
+			if err := refresh.Wait(); err != nil {
+				t.Fatalf("run %d: Wait() returned error: %v", i, err)
+			}
+			assertState(t, loadState(t, n.Store), State{LastCheckedAt: notifierNow, LatestVersion: "0.10.0", UpdateCheckInterval: "6h"})
+		}
+	})
+
 	// error path
 	t.Run("timed-out refresh returns ErrRefreshTimeout and leaves the file unchanged", func(t *testing.T) {
 		stall := make(chan struct{})
