@@ -514,6 +514,42 @@ func TestEngineRunReportsDuplicateStories(t *testing.T) {
 	}
 }
 
+// Stories with an empty Issue are hand-written and linked to no issue, so they
+// are neither reported as duplicates of each other nor matched to an issue.
+func TestEngineRunIgnoresStoriesWithoutIssue(t *testing.T) {
+	quietLogs(t)
+
+	n := &fakeNotion{
+		projects: []shared.Project{githubProject("p1", "owner/repo")},
+		stories: map[string][]shared.Story{"p1": {
+			{PageID: "manual-a", Issue: ""},
+			{PageID: "manual-b", Issue: ""},
+			{PageID: "manual-c", Issue: "   "},
+			{PageID: "manual-d", Issue: "   "},
+		}},
+		upsert: func(shared.StoryInput) (*shared.UpsertResult, error) {
+			return created(), nil
+		},
+	}
+	engine := NewEngine(n, []Provider{fakeGithub(githubIssue("#1", "owner/repo"))})
+
+	got, err := engine.Run(context.Background(), EngineRunOptions{})
+	if err != nil {
+		t.Fatalf("Run() unexpected error: %v", err)
+	}
+
+	want := &Report{Created: 1}
+	if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+		t.Errorf("Run() report mismatch (-want +got):\n%s", diff)
+	}
+	if len(n.calls) != 1 {
+		t.Fatalf("got %d upsert calls, want 1", len(n.calls))
+	}
+	if n.calls[0].existingStory != nil {
+		t.Errorf("existingStory = %+v, want nil: an unlinked story must not match an issue", n.calls[0].existingStory)
+	}
+}
+
 // An upsert error is recorded with the issue's Identifier and Provider (plan
 // steps 2.3 and 2.4, sync loop) and the remaining issues still sync.
 func TestEngineRunRecordsUpsertErrorsAndKeepsProcessing(t *testing.T) {

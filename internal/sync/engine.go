@@ -98,6 +98,11 @@ func (e *Engine) Run(ctx context.Context, options EngineRunOptions) (*Report, er
 
 		storiesByIssue := make(map[string]shared.Story)
 		for _, story := range stories {
+			// A story with no Issue is a hand-written one, not linked to any
+			// issue: it can never match, and several of them are not duplicates.
+			if strings.TrimSpace(story.Issue) == "" {
+				continue
+			}
 			if _, ok := storiesByIssue[story.Issue]; ok {
 				errors = append(errors, ReportError{
 					Identifier: story.Issue,
